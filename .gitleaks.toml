@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-specific allowlist. Keep empty unless a revoked historical fixture must be documented."
+paths = []
