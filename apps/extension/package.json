@@ -1,0 +1,20 @@
+{
+  "name": "@fluent-frame/extension",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run --environment jsdom --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fluent-frame/shared": "workspace:*",
+    "@vitejs/plugin-basic-ssl": "^2.1.0",
+    "vite": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.326",
+    "jsdom": "^26.1.0"
+  }
+}

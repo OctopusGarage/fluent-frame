@@ -1,0 +1,27 @@
+name: Feature Request
+description: Suggest an improvement or new capability
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for suggesting an improvement."
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What problem are you trying to solve?
+      placeholder: "I want FluentFrame to..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Desired solution
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you considered.

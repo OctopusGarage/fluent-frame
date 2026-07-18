@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+apps/*/dist/
+packages/*/dist/
+
+# Test and coverage output
+coverage/
+test-results/
+playwright-report/
+.playwright-cli/
+
+# Local agent/tool state
+/.superpowers/
+docs/superpowers/
+.codegraph/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# macOS
+.DS_Store
