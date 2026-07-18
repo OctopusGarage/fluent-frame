@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">FluentFrame logo</title>
+  <desc id="desc">A cinematic frame with bilingual learning ribbons forming a refined F mark.</desc>
+  <defs>
+    <linearGradient id="tile" x1="18" y1="8" x2="110" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172033"/>
+      <stop offset="0.52" stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#070912"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="18" y1="18" x2="110" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8D77B"/>
+      <stop offset="0.42" stop-color="#B4F0FF"/>
+      <stop offset="1" stop-color="#8C6CFF"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="38" y1="30" x2="92" y2="98" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.58" stop-color="#DDF7FF"/>
+      <stop offset="1" stop-color="#9ED8FF"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-18%" y="-18%" width="136%" height="136%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.34"/>
+    </filter>
+    <filter id="line-glow" x="-24%" y="-24%" width="148%" height="148%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#A9F1FF" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="128" height="128" rx="30" fill="url(#tile)"/>
+  <path d="M22 43V32c0-5.5 4.5-10 10-10h11M86 22h10c5.5 0 10 4.5 10 10v11M106 85v11c0 5.5-4.5 10-10 10H85M43 106H32c-5.5 0-10-4.5-10-10V85"
+        fill="none"
+        stroke="url(#frame)"
+        stroke-width="7"
+        stroke-linecap="round"
+        filter="url(#line-glow)"/>
+
+  <g filter="url(#soft-shadow)">
+    <path d="M39 35c0-3.9 3.1-7 7-7h43c3.9 0 7 3.1 7 7v4c0 3.9-3.1 7-7 7H57v15h28c3.9 0 7 3.1 7 7v4c0 3.9-3.1 7-7 7H57v20c0 3.9-3.1 7-7 7h-4c-3.9 0-7-3.1-7-7V35Z"
+          fill="url(#ribbon)"/>
+    <path d="M57 46h32c3.9 0 7-3.1 7-7v-4c0-3.9-3.1-7-7-7H46c-3.9 0-7 3.1-7 7v12c4.8 2.1 10.9 1.9 18-1Z"
+          fill="#FFFFFF"
+          opacity="0.32"/>
+    <path d="M63 91c11.7-3.4 22.8-1.4 32 6.4"
+          fill="none"
+          stroke="#F8D77B"
+          stroke-width="6"
+          stroke-linecap="round"/>
+    <path d="M69 99c7.7-1.6 15.2-0.3 22.2 4"
+          fill="none"
+          stroke="#8C6CFF"
+          stroke-width="4"
+          stroke-linecap="round"
+          opacity="0.88"/>
+  </g>
+</svg>
