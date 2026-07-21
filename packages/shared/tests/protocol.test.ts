@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseHostRequest, parseHostResponse, parseRequestId, parsePersonalNotes, parseYoutubeVideoId } from "../src/protocol.js";
+import {
+  parseHostRequest,
+  parseHostResponse,
+  parsePersonalNotes,
+  parseQueueJobId,
+  parseRequestId,
+  parseYoutubeVideoId,
+  WORKFLOW_VERSION,
+} from "../src/protocol.js";
 
 describe("parseYoutubeVideoId", () => {
   it("accepts normal YouTube IDs", () => {
@@ -57,6 +65,43 @@ describe("parseHostRequest", () => {
       id: "notes2",
       type: "savePersonalNotes",
       notes: [note],
+    });
+  });
+
+  it("parses queue requests", () => {
+    expect(parseHostRequest({
+      id: "queue1",
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      title: "Never Gonna Give You Up",
+    })).toEqual({
+      id: "queue1",
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      title: "Never Gonna Give You Up",
+    });
+    expect(parseHostRequest({ id: "queue2", type: "getQueue" })).toEqual({ id: "queue2", type: "getQueue" });
+    expect(parseHostRequest({
+      id: "queue3",
+      type: "removeQueueJob",
+      jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+    })).toEqual({
+      id: "queue3",
+      type: "removeQueueJob",
+      jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+    });
+    expect(parseHostRequest({
+      id: "queue4",
+      type: "retryQueueJob",
+      jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+    })).toEqual({
+      id: "queue4",
+      type: "retryQueueJob",
+      jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
     });
   });
 
@@ -130,7 +175,53 @@ describe("parseRequestId", () => {
   });
 });
 
+describe("parseQueueJobId", () => {
+  it("accepts deterministic queue job IDs", () => {
+    expect(parseQueueJobId(`dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`)).toBe(`dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`);
+  });
+
+  it("rejects path traversal", () => {
+    expect(() => parseQueueJobId("../bad")).toThrow("Invalid queue job ID");
+  });
+});
+
 describe("parseHostResponse", () => {
+  it("accepts queue responses", () => {
+    const job = {
+      id: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+      workflowVersion: WORKFLOW_VERSION,
+      status: "queued",
+      createdAt: "2026-07-21T00:00:00.000Z",
+      updatedAt: "2026-07-21T00:00:00.000Z",
+    };
+    expect(parseHostResponse("queue1", {
+      id: "queue1",
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job,
+    })).toEqual({
+      id: "queue1",
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job,
+    });
+    expect(parseHostResponse("queue2", {
+      id: "queue2",
+      ok: true,
+      type: "queue",
+      queue: { paused: false, runningJobId: job.id, jobs: [job] },
+    })).toEqual({
+      id: "queue2",
+      ok: true,
+      type: "queue",
+      queue: { paused: false, runningJobId: job.id, jobs: [job] },
+    });
+  });
+
   it("rejects learning subtitle results with invalid nested cue data", () => {
     expect(() => parseHostResponse("response1", {
       id: "response1",

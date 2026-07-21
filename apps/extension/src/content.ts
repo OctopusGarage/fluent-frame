@@ -2,6 +2,7 @@ import type { HostResponse, PersonalNote } from "@fluent-frame/shared";
 import { createVideoLearningSession } from "./generationSession.js";
 import { createRuntimeLearningGenerationClient, type ContentScriptRuntime } from "./learningGenerationClient.js";
 import { createCoachUi, type PersonalNotesStore } from "./ui.js";
+import { extractVideoIdFromUrl } from "./video.js";
 import { createYouTubePage } from "./youtubePage.js";
 export type { ContentScriptRuntime };
 
@@ -11,6 +12,29 @@ type BootstrapWindow = Window & {
 };
 
 const SYNC_INTERVAL_MS = 50;
+
+const VIDEO_CARD_SELECTOR = [
+  "ytd-compact-video-renderer",
+  "ytd-video-renderer",
+  "ytd-rich-item-renderer",
+  "ytd-grid-video-renderer",
+  "ytd-playlist-panel-video-renderer",
+].join(",");
+
+function cleanTitle(value: string | null | undefined): string | undefined {
+  const title = value?.replace(/\s+/g, " ").trim();
+  return title || undefined;
+}
+
+function titleForRightClickedVideo(anchor: HTMLAnchorElement): string | undefined {
+  const card = anchor.closest(VIDEO_CARD_SELECTOR);
+  const titleElement = card?.querySelector("#video-title, a#video-title, h3, h3 a, yt-formatted-string#video-title");
+  return cleanTitle(titleElement?.textContent)
+    ?? cleanTitle(anchor.getAttribute("title"))
+    ?? cleanTitle(anchor.getAttribute("aria-label"))
+    ?? cleanTitle(card?.querySelector("[title]")?.getAttribute("title"))
+    ?? cleanTitle(card?.querySelector("[aria-label]")?.getAttribute("aria-label"));
+}
 
 function createNativeNotesStore(runtime: ContentScriptRuntime): PersonalNotesStore {
   return {
@@ -56,6 +80,52 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   }
   bootstrapWindow.__fluentFrameBootstrapped = true;
 
+  const page = createYouTubePage(doc);
+
+  doc.addEventListener("contextmenu", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const anchor = target.closest<HTMLAnchorElement>("a[href]");
+    if (!anchor) {
+      return;
+    }
+    let videoId: string | undefined;
+    try {
+      videoId = extractVideoIdFromUrl(anchor.href);
+    } catch {
+      return;
+    }
+    if (!videoId) {
+      return;
+    }
+    runtime.sendMessage({
+      type: "rememberContextMenuLink",
+      videoId,
+      url: anchor.href,
+      title: titleForRightClickedVideo(anchor),
+    }, () => {});
+  }, true);
+
+  function enqueueVideo(
+    input: { videoId: string; url?: string; title?: string },
+    handlers: { onSuccess?(message: string): void; onError?(message: string): void } = {},
+  ): void {
+    runtime.sendMessage({ type: "enqueueVideo", videoId: input.videoId, url: input.url, title: input.title }, (response: HostResponse | undefined) => {
+      const error = runtime.lastError;
+      if (error) {
+        handlers.onError?.(error.message ?? "Local helper failed");
+        return;
+      }
+      if (!response || !response.ok) {
+        handlers.onError?.(response?.message ?? "Local helper failed");
+        return;
+      }
+      handlers.onSuccess?.(response.type === "queueJob" ? response.message : "Queued");
+    });
+  }
+
   const ui = createCoachUi(doc, {
     notesStore: createNativeNotesStore(runtime),
     onJumpToMs(startMs) {
@@ -64,8 +134,23 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
         video.currentTime = startMs / 1000;
       }
     },
+    onEnqueueVideo() {
+      const videoId = page.currentVideoId();
+      if (!videoId) {
+        ui.setError("Open a YouTube video first.");
+        return;
+      }
+      ui.setStatus("Adding video to queue...");
+      enqueueVideo({ videoId, url: doc.location.href, title: doc.title }, {
+        onSuccess(message) {
+          ui.setStatus(message);
+        },
+        onError(message) {
+          ui.setError(message);
+        },
+      });
+    },
   });
-  const page = createYouTubePage(doc);
   ui.mount(doc.body);
 
   function reconcilePlayerUi(): void {

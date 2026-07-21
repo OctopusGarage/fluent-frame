@@ -30,6 +30,29 @@ process.stdin.on("data", (chunk) => {
   }
   done = true;
   const request = JSON.parse(input.subarray(4, 4 + length).toString("utf8"));
+  const queueJob = {
+    id: "dQw4w9WgXcQ:en:e2e",
+    videoId: "dQw4w9WgXcQ",
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    title: "Fixture learning video",
+    captionLanguage: "en",
+    workflowVersion: "e2e",
+    status: "done",
+    createdAt: "2026-07-21T00:00:00.000Z",
+    updatedAt: "2026-07-21T00:00:00.000Z"
+  };
+  const failedQueueJob = {
+    id: "COh9hZ9GuVs:en:e2e",
+    videoId: "COh9hZ9GuVs",
+    url: "https://www.youtube.com/watch?v=COh9hZ9GuVs",
+    title: "No caption video",
+    captionLanguage: "en",
+    workflowVersion: "e2e",
+    status: "failed",
+    createdAt: "2026-07-21T00:00:00.000Z",
+    updatedAt: "2026-07-21T00:00:00.000Z",
+    error: "yt-dlp did not produce an SRT caption file"
+  };
   const response = request.type === "getPersonalNotes" ? {
     id: request.id,
     ok: true,
@@ -39,6 +62,17 @@ process.stdin.on("data", (chunk) => {
     id: request.id,
     ok: true,
     type: "personalNotesSaved"
+  } : request.type === "getQueue" ? {
+    id: request.id,
+    ok: true,
+    type: "queue",
+    queue: { paused: false, jobs: [queueJob, failedQueueJob] }
+  } : request.type === "enqueueVideo" ? {
+    id: request.id,
+    ok: true,
+    type: "queueJob",
+    message: "Queued",
+    job: queueJob
   } : {
     id: request.id,
     ok: true,
@@ -160,6 +194,14 @@ test("loads on YouTube SPA navigation and renders subtitles through native messa
                     <button class="ytp-settings-button" type="button" aria-label="Settings"></button>
                   </div>
                 </div>
+                <aside id="related">
+                  <ytd-compact-video-renderer>
+                    <a id="thumbnail" href="https://www.youtube.com/watch?v=o3RPPjzciqo"></a>
+                    <div id="details">
+                      <a id="video-title" href="https://www.youtube.com/watch?v=o3RPPjzciqo">Recommended match</a>
+                    </div>
+                  </ytd-compact-video-renderer>
+                </aside>
               </main>
             </body>
           </html>`,
@@ -179,6 +221,10 @@ test("loads on YouTube SPA navigation and renders subtitles through native messa
       window.history.pushState({}, "", "/watch?v=dQw4w9WgXcQ&t=42s");
     });
     await expect(page.locator("#ff-status")).toHaveText("Ready");
+
+    await page.getByRole("button", { name: "Add current video to FluentFrame queue" }).click();
+    await expect(page.locator("#ff-status")).toHaveText("Queued");
+    await expect(page.locator("#related .ff-recommendation-queue-button")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Generate learning subtitles" }).click();
     await expect(page.locator("#ff-status")).toContainText("Learning subtitles ready in");
@@ -235,6 +281,15 @@ test("loads on YouTube SPA navigation and renders subtitles through native messa
 
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
     await expect(page.getByRole("button", { name: "Generate learning subtitles" })).toBeVisible();
+    await expect(page.locator("#queue-summary")).toContainText("Ready 1");
+    await expect(page.locator("#queue-summary")).toContainText("Failed 1");
+    await expect(page.locator("#queue-list")).toContainText("Fixture learning video");
+    await expect(page.locator("#queue-list")).toContainText("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await expect(page.locator("#queue-list")).toContainText("yt-dlp did not produce an SRT caption file");
+    const newTabPromise = context.waitForEvent("page");
+    await page.getByRole("button", { name: "Open" }).click();
+    const newTab = await newTabPromise;
+    await expect(newTab).toHaveURL("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   } finally {
     await restoreNativeHost();
     await context.close();

@@ -165,10 +165,11 @@ First implementation:
   - failed count
 - Popup supports retry and remove.
 - Watch page can add the current video through the existing FluentFrame panel or badge area.
+- Right-clicking a YouTube video link or the current watch page shows a Chrome context-menu action for adding that video to the queue.
 
 Later implementation:
 
-- Add queue buttons to YouTube search, playlist, and channel video cards.
+- Extend the context-menu workflow to any YouTube search, playlist, or channel video link that Chrome exposes through `linkUrl`.
 - Add a full queue manager page if popup density becomes a problem.
 
 ## Error Handling

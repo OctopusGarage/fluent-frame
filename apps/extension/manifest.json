@@ -3,7 +3,7 @@
   "name": "FluentFrame",
   "version": "0.1.0",
   "description": "Turn YouTube captions into local bilingual subtitles and English learning notes.",
-  "permissions": ["nativeMessaging", "activeTab", "scripting"],
+  "permissions": ["nativeMessaging", "activeTab", "scripting", "contextMenus"],
   "host_permissions": ["https://www.youtube.com/*"],
   "background": {
     "service_worker": "background.js",

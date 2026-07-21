@@ -1,8 +1,9 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { WORKFLOW_VERSION } from "@fluent-frame/shared";
+import { WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
+import { writeCachedResult } from "../src/cache.js";
 import { handleRequest } from "../src/index.js";
 
 describe("handleRequest", () => {
@@ -13,6 +14,35 @@ describe("handleRequest", () => {
       type: "status",
       installed: true,
     });
+  });
+
+  it("writes structured request lifecycle logs", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-logs-"));
+    const previousLogFile = process.env.FF_LOG_FILE;
+    process.env.FF_LOG_FILE = join(dir, "native-host.log");
+
+    try {
+      await expect(handleRequest({ id: "log1", type: "getStatus" })).resolves.toMatchObject({
+        id: "log1",
+        ok: true,
+        type: "status",
+      });
+      const events = (await readFile(process.env.FF_LOG_FILE, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { event: string; requestId: string });
+      expect(events).toEqual([
+        expect.objectContaining({ event: "request.started", requestId: "log1" }),
+        expect.objectContaining({ event: "request.completed", requestId: "log1" }),
+      ]);
+    } finally {
+      if (previousLogFile === undefined) {
+        delete process.env.FF_LOG_FILE;
+      } else {
+        process.env.FF_LOG_FILE = previousLogFile;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("returns native host health", async () => {
@@ -145,6 +175,86 @@ describe("handleRequest", () => {
         delete process.env.FF_NOTES_FILE;
       } else {
         process.env.FF_NOTES_FILE = previousNotesFile;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("handles queue requests through the native host", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-queue-"));
+    const previousCacheDir = process.env.FF_CACHE_DIR;
+    const previousQueueFile = process.env.FF_QUEUE_FILE;
+    const previousYtDlpPath = process.env.FF_YTDLP_PATH;
+    const cacheDir = join(dir, "cache");
+    const queueFile = join(dir, "queue", "jobs.json");
+    const ytDlpPath = join(dir, "fake-yt-dlp.mjs");
+    process.env.FF_CACHE_DIR = cacheDir;
+    process.env.FF_QUEUE_FILE = queueFile;
+    process.env.FF_YTDLP_PATH = ytDlpPath;
+    const cachedResult: LearningSubtitleResult = {
+      videoId: "dQw4w9WgXcQ",
+      sourceLanguage: "en",
+      workflowVersion: WORKFLOW_VERSION,
+      generatedAt: "2026-07-21T00:00:00.000Z",
+      subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Nice pass.", chinese: "传得漂亮。", phraseIds: ["p1"] }],
+      phrases: [{ id: "p1", cueId: 1, phrase: "nice pass", meaningZh: "传得漂亮", explanationEn: "A good pass.", difficulty: "basic" }],
+    };
+
+    try {
+      await writeFile(
+        ytDlpPath,
+        `#!/usr/bin/env node
+console.log("Never Gonna Give You Up");
+`,
+        "utf8",
+      );
+      await chmod(ytDlpPath, 0o755);
+      await writeCachedResult(cacheDir, cachedResult);
+      const enqueued = await handleRequest({
+        id: "queue1",
+        type: "enqueueVideo",
+        videoId: "dQw4w9WgXcQ",
+        captionLanguage: "en",
+        url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      });
+      expect(enqueued).toMatchObject({
+        id: "queue1",
+        ok: true,
+        type: "queueJob",
+        message: "Already ready",
+        job: { videoId: "dQw4w9WgXcQ", status: "done", title: "Never Gonna Give You Up" },
+      });
+      await expect(handleRequest({ id: "queue2", type: "getQueue" })).resolves.toMatchObject({
+        id: "queue2",
+        ok: true,
+        type: "queue",
+        queue: { jobs: [expect.objectContaining({ status: "done", title: "Never Gonna Give You Up" })] },
+      });
+      await expect(handleRequest({
+        id: "queue3",
+        type: "removeQueueJob",
+        jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+      })).resolves.toEqual({
+        id: "queue3",
+        ok: true,
+        type: "queue",
+        queue: { paused: false, jobs: [] },
+      });
+    } finally {
+      if (previousCacheDir === undefined) {
+        delete process.env.FF_CACHE_DIR;
+      } else {
+        process.env.FF_CACHE_DIR = previousCacheDir;
+      }
+      if (previousQueueFile === undefined) {
+        delete process.env.FF_QUEUE_FILE;
+      } else {
+        process.env.FF_QUEUE_FILE = previousQueueFile;
+      }
+      if (previousYtDlpPath === undefined) {
+        delete process.env.FF_YTDLP_PATH;
+      } else {
+        process.env.FF_YTDLP_PATH = previousYtDlpPath;
       }
       await rm(dir, { recursive: true, force: true });
     }

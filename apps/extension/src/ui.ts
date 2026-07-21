@@ -17,6 +17,7 @@ type LayoutMode = "panel" | "toolbar" | "drawer";
 
 export type CoachUiOptions = {
   onJumpToMs?: (startMs: number) => void;
+  onEnqueueVideo?: () => void;
   writeClipboard?: (text: string) => Promise<void> | void;
   notesStore?: PersonalNotesStore;
 };
@@ -358,6 +359,10 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
       return;
     }
     byId("ff-panel").setAttribute("aria-hidden", "true");
+  });
+
+  byId<HTMLButtonElement>("ff-enqueue").addEventListener("click", () => {
+    options.onEnqueueVideo?.();
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-layout-option]").forEach((button) => {

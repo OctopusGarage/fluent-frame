@@ -52,6 +52,18 @@ function processVideoMessages(runtime: { sendMessage: { mock: { calls: unknown[]
   });
 }
 
+function enqueueVideoMessages(runtime: { sendMessage: { mock: { calls: unknown[][] } } }): unknown[] {
+  return runtime.sendMessage.mock.calls.map((call) => call[0]).filter((message) => {
+    return (message as { type?: string }).type === "enqueueVideo";
+  });
+}
+
+function rememberContextMenuMessages(runtime: { sendMessage: { mock: { calls: unknown[][] } } }): unknown[] {
+  return runtime.sendMessage.mock.calls.map((call) => call[0]).filter((message) => {
+    return (message as { type?: string }).type === "rememberContextMenuLink";
+  });
+}
+
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -164,6 +176,101 @@ describe("bootstrapContentScript", () => {
       { type: "processCurrentVideo", videoId: "dQw4w9WgXcQ" },
       expect.any(Function),
     );
+  });
+
+  it("adds the current watch video to the generation queue", () => {
+    const runtime = {
+      lastError: undefined,
+      sendMessage: vi.fn((_message: unknown, callback: (response: unknown) => void) => {
+        if ((_message as { type?: string }).type === "getPersonalNotes") {
+          callback({ id: "notes-1", ok: true, type: "personalNotes", notes: [] });
+          return;
+        }
+        callback({
+          id: "queue-1",
+          ok: true,
+          type: "queueJob",
+          message: "Queued",
+          job: {
+            id: "dQw4w9WgXcQ:en:test",
+            videoId: "dQw4w9WgXcQ",
+            captionLanguage: "en",
+            workflowVersion: "test",
+            status: "queued",
+            createdAt: "2026-07-21T00:00:00.000Z",
+            updatedAt: "2026-07-21T00:00:00.000Z",
+          },
+        });
+      }),
+    } satisfies ContentScriptRuntime;
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime);
+    document.getElementById("ff-enqueue")?.click();
+
+    expect(enqueueVideoMessages(runtime)).toEqual([
+      expect.objectContaining({
+        type: "enqueueVideo",
+        videoId: "dQw4w9WgXcQ",
+      }),
+    ]);
+    expect(document.getElementById("ff-status")?.textContent).toBe("Queued");
+  });
+
+  it("does not inject queue buttons into right-hand recommended videos", () => {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="related">
+        <ytd-compact-video-renderer>
+          <a id="thumbnail" href="https://www.youtube.com/watch?v=o3RPPjzciqo"></a>
+          <div id="details">
+            <a id="video-title" href="https://www.youtube.com/watch?v=o3RPPjzciqo">Spain vs France</a>
+          </div>
+        </ytd-compact-video-renderer>
+        <ytd-compact-video-renderer>
+          <a id="thumbnail" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"></a>
+          <div id="details">
+            <a id="video-title" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Current video</a>
+          </div>
+        </ytd-compact-video-renderer>
+      </div>
+    `);
+    const runtime = createRuntime();
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime);
+    bootstrapContentScript(document, win, runtime);
+
+    expect(document.querySelectorAll(".ff-recommendation-queue-button")).toHaveLength(0);
+    expect(enqueueVideoMessages(runtime)).toEqual([]);
+  });
+
+  it("remembers the exact right-clicked recommended video link for the context menu", () => {
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="related">
+        <ytd-compact-video-renderer>
+          <a id="thumbnail" href="/watch?v=vZ5Bz6ILG5E&pp=ugUEEgJlbg%3D%3D">
+            <span id="thumb-label">10:26</span>
+          </a>
+          <div id="details">
+            <a id="video-title" href="/watch?v=vZ5Bz6ILG5E&pp=ugUEEgJlbg%3D%3D">10-Minute Match | Zidane & Henry</a>
+          </div>
+        </ytd-compact-video-renderer>
+      </div>
+    `);
+    const runtime = createRuntime();
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime);
+    document.getElementById("thumb-label")?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+
+    expect(rememberContextMenuMessages(runtime)).toEqual([
+      {
+        type: "rememberContextMenuLink",
+        videoId: "vZ5Bz6ILG5E",
+        url: "http://localhost:3000/watch?v=vZ5Bz6ILG5E&pp=ugUEEgJlbg%3D%3D",
+        title: "10-Minute Match | Zidane & Henry",
+      },
+    ]);
   });
 
   it("clears stale subtitles when starting a new request", () => {

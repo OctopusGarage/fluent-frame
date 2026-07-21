@@ -34,9 +34,24 @@ pnpm e2e
 5. Reload the page and generate again.
 6. Confirm the cached result loads faster than the first run.
 
+## Verify Queue
+
+1. Open the FluentFrame popup on a YouTube watch page.
+2. Click `Add current video to queue`.
+3. Confirm the popup shows `Queued`, `Already generating`, or `Already ready`.
+4. Paste a YouTube watch URL or `youtu.be` URL into the popup queue form.
+5. Confirm the queue summary updates.
+6. Click `Add to queue` in the in-video FluentFrame panel.
+7. Right-click a right-hand recommended video link and choose `Add video to FluentFrame queue`.
+8. Confirm the current video does not navigate away and the queue summary shows the new job state.
+9. Confirm repeated clicks do not create duplicate jobs.
+10. Inspect `~/.fluent-frame/queue/jobs.json` and confirm the job status moves through `queued`, `running`, and then `done` or `failed`.
+11. Open a queued video after generation completes and confirm learning subtitles load from cache without waiting for a full generation run.
+
 ## Error Checks
 
 - Chrome launches the native host from the installed manifest, so shell variables set in a normal terminal will not affect an already-running Chrome instance. To verify missing-binary errors, temporarily edit `~/.fluent-frame/bin/native-host` and set `export FF_YTDLP_PATH=/missing/yt-dlp` before the `node` command, then restore the wrapper after the check.
 - Repeat the wrapper edit with `export FF_CODEX_PATH=/missing/codex` or `export FF_CLAUDE_PATH=/missing/claude` and confirm the extension reports that the selected agent is missing, then restore the wrapper.
 - Open another YouTube video in the same tab and confirm the UI resets to `Ready`.
 - Toggle the overlay and confirm the side panel remains visible.
+- Retry a failed queue job from the popup and confirm it returns to `queued`.

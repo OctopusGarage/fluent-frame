@@ -43,20 +43,104 @@
       #generate {
         width: 100%;
         padding: 10px 12px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
         background: #2563eb;
         border-color: #3b82f6;
         font-weight: 650;
+      }
+      #enqueue-current {
+        width: 100%;
+        padding: 9px 12px;
+        margin-bottom: 10px;
+        font-weight: 620;
+      }
+      form {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      input {
+        min-width: 0;
+        flex: 1;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 8px;
+        padding: 8px 9px;
+        background: rgba(15, 23, 42, 0.82);
+        color: #e5eefb;
+        font: inherit;
+      }
+      form button {
+        padding: 8px 10px;
       }
       #refresh-health {
         width: 32px;
         height: 32px;
       }
       .status-card {
+        margin-bottom: 12px;
         border: 1px solid rgba(148, 163, 184, 0.2);
         border-radius: 8px;
         padding: 10px;
         background: rgba(15, 23, 42, 0.72);
+      }
+      .queue-card {
+        margin-bottom: 12px;
+      }
+      .queue-title {
+        margin-bottom: 7px;
+        color: #dbeafe;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      #queue-summary,
+      #queue-running {
+        color: #cbd5e1;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      #queue-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .queue-job {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 7px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 7px;
+        background: rgba(30, 41, 59, 0.46);
+      }
+      .queue-job-text {
+        min-width: 0;
+      }
+      .queue-job-title {
+        color: #dbeafe;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .queue-job-detail {
+        margin-top: 2px;
+        color: #94a3b8;
+        font-size: 10px;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .queue-job-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .queue-job-actions button {
+        padding: 4px 6px;
+        font-size: 11px;
       }
       .health-line {
         padding: 7px 0;
@@ -92,6 +176,17 @@
       <button id="refresh-health" type="button" title="Refresh setup status">↻</button>
     </header>
     <button id="generate" type="button">Generate learning subtitles</button>
+    <button id="enqueue-current" type="button">Add current video to queue</button>
+    <form id="enqueue-url-form">
+      <input id="enqueue-url" type="url" placeholder="Paste YouTube URL" />
+      <button type="submit">Queue</button>
+    </form>
+    <section id="queue-card" class="status-card queue-card" aria-label="Generation queue">
+      <div class="queue-title">Generation queue</div>
+      <div id="queue-summary">Loading queue...</div>
+      <div id="queue-running">Checking active job...</div>
+      <div id="queue-list"></div>
+    </section>
     <section class="status-card" aria-label="Setup status">
       <div id="native-host" class="health-line">Checking native host...</div>
       <div id="yt-dlp" class="health-line">Checking yt-dlp...</div>

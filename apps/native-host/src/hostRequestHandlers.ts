@@ -4,10 +4,12 @@ import type { HostConfig } from "./config.js";
 import { buildHealth } from "./hostHealth.js";
 import { readPersonalNotes, writePersonalNotes } from "./notes.js";
 import { handleProcessVideoRequest } from "./processVideoRequestHandler.js";
+import { createQueueRequestHandler } from "./queueRequestHandler.js";
+import type { Logger } from "./logger.js";
 
 type HostRequestHandler<T extends HostRequest = HostRequest> = (
   request: T,
-  context: { config: HostConfig; emit?: (response: HostResponse) => void },
+  context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
 ) => Promise<HostResponse>;
 
 function cacheErrorResponse(id: string, error: unknown): HostResponse {
@@ -73,11 +75,23 @@ const requestHandlers = {
   async processVideo(request, { config, emit }) {
     return handleProcessVideoRequest(request, { config, ...(emit ? { emit } : {}) });
   },
+  async enqueueVideo(request, { config }) {
+    return createQueueRequestHandler(config).enqueueVideo(request);
+  },
+  async getQueue(request, { config }) {
+    return createQueueRequestHandler(config).getQueue(request);
+  },
+  async removeQueueJob(request, { config }) {
+    return createQueueRequestHandler(config).removeQueueJob(request);
+  },
+  async retryQueueJob(request, { config }) {
+    return createQueueRequestHandler(config).retryQueueJob(request);
+  },
 } satisfies { [Type in HostRequest["type"]]: HostRequestHandler<Extract<HostRequest, { type: Type }>> };
 
 export function handleParsedRequest(
   request: HostRequest,
-  context: { config: HostConfig; emit?: (response: HostResponse) => void },
+  context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
 ): Promise<HostResponse> {
   return requestHandlers[request.type](request as never, context);
 }

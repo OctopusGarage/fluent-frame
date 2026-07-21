@@ -58,6 +58,37 @@ The original SRT remains the timing authority. Agent output may correct English,
 add Chinese text, and create learning events, but it must not redefine playback
 timing.
 
+## Pre-Generation Queue
+
+FluentFrame can enqueue videos before the user watches them:
+
+```text
+Add current video / paste YouTube URL
+  -> background service worker creates enqueueVideo request
+  -> native host writes ~/.fluent-frame/queue/jobs.json
+  -> queue runner starts automatically
+  -> one queued job is processed at a time
+  -> processVideo writes the normal cache result
+  -> later watch page loads the cached result
+```
+
+The queue is idempotent by `videoId + captionLanguage + workflowVersion`.
+Duplicate clicks return the existing job state:
+
+- `Already queued`
+- `Already generating`
+- `Already ready`
+- `Retry required`
+
+The native host keeps queue execution serial so local Codex or Claude does not
+run multiple expensive generations at once.
+
+On YouTube watch pages, the background service worker registers Chrome
+context-menu actions for YouTube video links and the current watch page. This
+keeps recommendation queueing inside the browser's native right-click workflow,
+so FluentFrame does not inject controls into YouTube recommendation cards or
+compete with other translation/video extensions in the page layout.
+
 ## Persistent Data
 
 ```text
@@ -65,8 +96,14 @@ timing.
 ├── bin/native-host
 ├── config.json
 ├── cache/<videoId>/<language>/<workflowVersion>/result.json
+├── queue/jobs.json
+├── logs/native-host.log
 └── notes.json
 ```
+
+The native host writes JSON-line logs for request, queue, metadata, and
+generation events. Logs rotate to `native-host.log.1` at 5 MB. See
+[logging.md](logging.md).
 
 Browser-side generation timing estimates are stored in YouTube page localStorage:
 
@@ -99,6 +136,8 @@ disconnects the active port so stale batches cannot overwrite the new video.
 - `SubtitleCue`
 - `PhraseExplanation`
 - `PersonalNote`
+- `QueueJob`
+- `QueueState`
 
 Both extension and native host import these types so protocol drift is caught by
 TypeScript and tests.

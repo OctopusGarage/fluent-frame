@@ -137,12 +137,28 @@ FF_AGENT=claude FF_CLAUDE_PATH=/absolute/path/to/claude pnpm setup
 
 ## Chrome Popup Status
 
-The extension popup runs a native-host health check and shows:
+The extension popup can add videos to the local generation queue and runs a
+native-host health check. It shows:
 
+- current queue counts
+- the active generation job, when one is running
 - native host connection
 - selected agent
 - `yt-dlp` availability
 - concrete setup commands when anything is missing
+
+Queue jobs are stored at:
+
+```text
+~/.fluent-frame/queue/jobs.json
+```
+
+Adding the same video more than once is safe. FluentFrame returns the existing
+state instead of creating duplicate local-agent jobs.
+
+On YouTube watch pages, you can right-click a recommended video link and choose
+`Add video to FluentFrame queue`. You can also right-click the current watch page
+or video area and choose `Add current video to FluentFrame queue`.
 
 If the popup says the native host is not connected, run:
 
@@ -150,6 +166,14 @@ If the popup says the native host is not connected, run:
 pnpm run doctor
 pnpm link:chrome <extension-id>
 ```
+
+For debugging, inspect the native-host log:
+
+```bash
+tail -f ~/.fluent-frame/logs/native-host.log
+```
+
+See [logging.md](logging.md) for structured fields and search examples.
 
 ## Native Messaging Boundary
 

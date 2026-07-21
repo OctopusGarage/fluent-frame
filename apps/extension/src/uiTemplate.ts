@@ -43,6 +43,13 @@ export function createCoachRoot(doc: Document): HTMLElement {
           <span class="ff-command-meta">Translate and explain this video</span>
         </span>
       </button>
+      <button id="ff-enqueue" class="ff-command" type="button" aria-label="Add current video to FluentFrame queue">
+        <span class="ff-command-icon" aria-hidden="true">Q</span>
+        <span>
+          <span class="ff-command-title">Add to queue</span>
+          <span class="ff-command-meta">Generate before watching later</span>
+        </span>
+      </button>
       <div id="ff-progress" aria-live="polite" hidden></div>
 
       <div class="ff-control-row">

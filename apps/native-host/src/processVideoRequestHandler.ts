@@ -1,5 +1,6 @@
 import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
+import { createLogger } from "./logger.js";
 
 type ProcessVideoRequest = Extract<HostRequest, { type: "processVideo" }>;
 
@@ -8,7 +9,17 @@ export async function handleProcessVideoRequest(
   context: { config: HostConfig; emit?: (response: HostResponse) => void },
 ): Promise<HostResponse> {
   const { config, emit } = context;
+  const logger = createLogger(config.logFile);
   try {
+    await logger.log({
+      level: "info",
+      component: "processor",
+      event: "generation.started",
+      message: "Starting learning subtitle generation request",
+      requestId: request.id,
+      videoId: request.videoId,
+      details: { captionLanguage: request.captionLanguage, stream: Boolean(request.stream) },
+    });
     if (request.stream) {
       emit?.({
         id: request.id,
@@ -32,6 +43,15 @@ export async function handleProcessVideoRequest(
         ? {
             onEvent(event) {
               if (event.type === "partialResult") {
+                void logger.log({
+                  level: "info",
+                  component: "processor",
+                  event: "generation.partial",
+                  message: "Generated partial learning subtitle batch",
+                  requestId: request.id,
+                  videoId: request.videoId,
+                  details: { completedBatches: event.completedBatches, totalBatches: event.totalBatches },
+                });
                 emit?.({
                   id: request.id,
                   ok: true,
@@ -76,8 +96,26 @@ export async function handleProcessVideoRequest(
         progress: { stage: "done", message: "Finalizing learning subtitles" },
       });
     }
+    await logger.log({
+      level: output.mode === "generated" || output.mode === "cache" ? "info" : "warn",
+      component: "processor",
+      event: "generation.completed",
+      message: "Completed learning subtitle generation request",
+      requestId: request.id,
+      videoId: request.videoId,
+      details: { mode: output.mode, fallbackReason: output.fallbackReason },
+    });
     return { id: request.id, ok: true, type: "result", result: output.result };
   } catch (error) {
+    await logger.log({
+      level: "error",
+      component: "processor",
+      event: "generation.failed",
+      message: "Learning subtitle generation request failed",
+      requestId: request.id,
+      videoId: request.videoId,
+      details: { error },
+    });
     return {
       id: request.id,
       ok: false,

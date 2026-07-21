@@ -8,6 +8,8 @@ export type HostConfig = {
   agent: AgentName;
   cacheDir: string;
   notesFile: string;
+  queueFile: string;
+  logFile: string;
   ytDlpPath: string;
   codexPath: string;
   claudePath: string;
@@ -17,6 +19,8 @@ export type LocalConfigFile = Partial<{
   agent: AgentName;
   cacheDir: string;
   notesFile: string;
+  queueFile: string;
+  logFile: string;
   ytDlpPath: string;
   codexPath: string;
   claudePath: string;
@@ -47,6 +51,8 @@ export function loadHostConfig(env: NodeJS.ProcessEnv = process.env): HostConfig
     agent,
     cacheDir: env.FF_CACHE_DIR ?? localConfig.cacheDir ?? join(dataDir, "cache"),
     notesFile: env.FF_NOTES_FILE ?? localConfig.notesFile ?? join(dataDir, "notes.json"),
+    queueFile: env.FF_QUEUE_FILE ?? localConfig.queueFile ?? join(dataDir, "queue", "jobs.json"),
+    logFile: env.FF_LOG_FILE ?? localConfig.logFile ?? join(dataDir, "logs", "native-host.log"),
     ytDlpPath: env.FF_YTDLP_PATH ?? localConfig.ytDlpPath ?? "yt-dlp",
     codexPath: env.FF_CODEX_PATH ?? localConfig.codexPath ?? "codex",
     claudePath: env.FF_CLAUDE_PATH ?? localConfig.claudePath ?? "claude",

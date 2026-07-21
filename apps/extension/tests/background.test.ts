@@ -1,16 +1,18 @@
-import { NATIVE_HOST_NAME } from "@fluent-frame/shared";
+import { NATIVE_HOST_NAME, WORKFLOW_VERSION } from "@fluent-frame/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRequestId,
   normalizeExtensionError,
   normalizeNativeResponse,
   registerBackgroundListener,
+  registerQueueContextMenus,
   type ExtensionRuntime,
 } from "../src/background.js";
 
 type RuntimeMessageCallback = (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean;
 type NativeResponseFactory = (request: unknown) => unknown;
 type PortListener<T> = { addListener(callback: T): void };
+type ContextMenuClick = (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) => void;
 type MockPort = {
   name: string;
   onMessage: PortListener<(message: unknown) => void>;
@@ -20,6 +22,29 @@ type MockPort = {
   emitMessage(message: unknown): void;
   emitDisconnect(): void;
 };
+
+function createContextMenusMock() {
+  let clickListener: ContextMenuClick | undefined;
+  return {
+    contextMenus: {
+      removeAll: vi.fn((callback?: () => void) => {
+        callback?.();
+      }),
+      create: vi.fn(),
+      onClicked: {
+        addListener: vi.fn((callback: ContextMenuClick) => {
+          clickListener = callback;
+        }),
+      },
+    },
+    click(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) {
+      if (!clickListener) {
+        throw new Error("Expected context menu click listener");
+      }
+      clickListener(info, tab);
+    },
+  };
+}
 
 function createRuntimeMock(response: unknown | NativeResponseFactory, lastError?: { message?: string }) {
   let listener: RuntimeMessageCallback | undefined;
@@ -167,6 +192,31 @@ describe("background helpers", () => {
     });
   });
 
+  it("accepts valid native queue responses", () => {
+    const job = {
+      id: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+      workflowVersion: WORKFLOW_VERSION,
+      status: "queued",
+      createdAt: "2026-07-21T00:00:00.000Z",
+      updatedAt: "2026-07-21T00:00:00.000Z",
+    };
+    expect(normalizeNativeResponse("queue1", {
+      id: "queue1",
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job,
+    })).toEqual({
+      id: "queue1",
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job,
+    });
+  });
+
   it("registers a runtime message listener", () => {
     const { runtime } = createRuntimeMock(undefined);
 
@@ -216,6 +266,230 @@ describe("background helpers", () => {
         type: "cacheMiss",
       });
     });
+  });
+
+  it("forwards queue requests to the native host", async () => {
+    const { runtime, getListener } = createRuntimeMock((request: unknown) => ({
+      id: (request as { id: string }).id,
+      ok: true,
+      type: "queue",
+      queue: { paused: false, jobs: [] },
+    }));
+    const sendResponse = vi.fn();
+    registerBackgroundListener(runtime);
+
+    expect(getListener()({ type: "getQueue" }, {}, sendResponse)).toBe(true);
+    expect(getListener()({
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      title: "Video title",
+    }, {}, sendResponse)).toBe(true);
+    expect(getListener()({
+      type: "removeQueueJob",
+      jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+    }, {}, sendResponse)).toBe(true);
+    expect(getListener()({
+      type: "retryQueueJob",
+      jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+    }, {}, sendResponse)).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendNativeMessage).toHaveBeenCalledTimes(4);
+    });
+    expect(runtime.sendNativeMessage.mock.calls.map((call) => (call[1] as { type: string }).type)).toEqual([
+      "getQueue",
+      "enqueueVideo",
+      "removeQueueJob",
+      "retryQueueJob",
+    ]);
+    expect(runtime.sendNativeMessage.mock.calls[1]?.[1]).toMatchObject({
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      title: "Video title",
+    });
+  });
+
+  it("registers Chrome context menus for queueing links and current pages", () => {
+    const { runtime } = createRuntimeMock(undefined);
+    const contextMenuMock = createContextMenusMock();
+    const chromeApi = {
+      runtime: {
+        ...runtime,
+        onInstalled: { addListener: vi.fn() },
+        onStartup: { addListener: vi.fn() },
+      },
+      contextMenus: contextMenuMock.contextMenus,
+    };
+
+    registerQueueContextMenus(chromeApi);
+
+    expect(contextMenuMock.contextMenus.removeAll).toHaveBeenCalledOnce();
+    expect(contextMenuMock.contextMenus.create).toHaveBeenCalledTimes(2);
+    expect(contextMenuMock.contextMenus.create).toHaveBeenCalledWith(expect.objectContaining({
+      id: "fluent-frame-enqueue-link-video",
+      title: "Add video to FluentFrame queue",
+      contexts: ["link"],
+      targetUrlPatterns: ["https://www.youtube.com/watch*", "https://youtu.be/*"],
+    }));
+    expect(contextMenuMock.contextMenus.create).toHaveBeenCalledWith(expect.objectContaining({
+      id: "fluent-frame-enqueue-page-video",
+      title: "Add current video to FluentFrame queue",
+      contexts: ["page", "video"],
+      documentUrlPatterns: ["https://www.youtube.com/watch*"],
+    }));
+    expect(contextMenuMock.contextMenus.onClicked.addListener).toHaveBeenCalledOnce();
+    expect(chromeApi.runtime.onInstalled.addListener).toHaveBeenCalledOnce();
+    expect(chromeApi.runtime.onStartup.addListener).toHaveBeenCalledOnce();
+  });
+
+  it("queues a right-clicked YouTube video link through native messaging", async () => {
+    const { runtime, getListener } = createRuntimeMock((request: unknown) => ({
+      id: (request as { id: string }).id,
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job: {
+        id: `o3RPPjzciqo:en:${WORKFLOW_VERSION}`,
+        videoId: "o3RPPjzciqo",
+        captionLanguage: "en",
+        workflowVersion: WORKFLOW_VERSION,
+        status: "queued",
+        createdAt: "2026-07-21T00:00:00.000Z",
+        updatedAt: "2026-07-21T00:00:00.000Z",
+      },
+    }));
+    const contextMenuMock = createContextMenusMock();
+    registerQueueContextMenus({ runtime, contextMenus: contextMenuMock.contextMenus });
+    registerBackgroundListener(runtime);
+    const sendResponse = vi.fn();
+    expect(getListener()({
+      type: "rememberContextMenuLink",
+      url: "https://www.youtube.com/watch?v=o3RPPjzciqo&pp=ugUEEgJlbg%3D%3D",
+      title: "Recommended match",
+    }, { tab: { id: 42 } }, sendResponse)).toBe(false);
+
+    contextMenuMock.click({
+      menuItemId: "fluent-frame-enqueue-link-video",
+      linkUrl: "https://www.youtube.com/watch?v=o3RPPjzciqo&list=abc",
+      pageUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    } as chrome.contextMenus.OnClickData, {
+      id: 42,
+      title: "Current page title",
+    } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendNativeMessage).toHaveBeenCalledOnce();
+    });
+    expect(runtime.sendNativeMessage.mock.calls[0]?.[1]).toMatchObject({
+      type: "enqueueVideo",
+      videoId: "o3RPPjzciqo",
+      url: "https://www.youtube.com/watch?v=o3RPPjzciqo&list=abc",
+      title: "Recommended match",
+    });
+  });
+
+  it("falls back to the remembered right-click link when Chrome omits linkUrl", async () => {
+    const { runtime, getListener } = createRuntimeMock((request: unknown) => ({
+      id: (request as { id: string }).id,
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job: {
+        id: `vZ5Bz6ILG5E:en:${WORKFLOW_VERSION}`,
+        videoId: "vZ5Bz6ILG5E",
+        captionLanguage: "en",
+        workflowVersion: WORKFLOW_VERSION,
+        status: "queued",
+        createdAt: "2026-07-21T00:00:00.000Z",
+        updatedAt: "2026-07-21T00:00:00.000Z",
+      },
+    }));
+    const contextMenuMock = createContextMenusMock();
+    registerQueueContextMenus({ runtime, contextMenus: contextMenuMock.contextMenus });
+    registerBackgroundListener(runtime);
+    getListener()({
+      type: "rememberContextMenuLink",
+      url: "https://www.youtube.com/watch?v=vZ5Bz6ILG5E&pp=ugUEEgJlbg%3D%3D",
+      title: "Stored recommendation",
+    }, { tab: { id: 84 } }, vi.fn());
+
+    contextMenuMock.click({
+      menuItemId: "fluent-frame-enqueue-link-video",
+      pageUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    } as chrome.contextMenus.OnClickData, {
+      id: 84,
+      title: "Current page title",
+    } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendNativeMessage).toHaveBeenCalledOnce();
+    });
+    expect(runtime.sendNativeMessage.mock.calls[0]?.[1]).toMatchObject({
+      type: "enqueueVideo",
+      videoId: "vZ5Bz6ILG5E",
+      url: "https://www.youtube.com/watch?v=vZ5Bz6ILG5E&pp=ugUEEgJlbg%3D%3D",
+      title: "Stored recommendation",
+    });
+  });
+
+  it("queues the current watch page from the context menu", async () => {
+    const { runtime } = createRuntimeMock((request: unknown) => ({
+      id: (request as { id: string }).id,
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job: {
+        id: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+        videoId: "dQw4w9WgXcQ",
+        captionLanguage: "en",
+        workflowVersion: WORKFLOW_VERSION,
+        status: "queued",
+        createdAt: "2026-07-21T00:00:00.000Z",
+        updatedAt: "2026-07-21T00:00:00.000Z",
+      },
+    }));
+    const contextMenuMock = createContextMenusMock();
+    registerQueueContextMenus({ runtime, contextMenus: contextMenuMock.contextMenus });
+
+    contextMenuMock.click({
+      menuItemId: "fluent-frame-enqueue-page-video",
+      pageUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s",
+    } as chrome.contextMenus.OnClickData, { title: "Current video" } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendNativeMessage).toHaveBeenCalledOnce();
+    });
+    expect(runtime.sendNativeMessage.mock.calls[0]?.[1]).toMatchObject({
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s",
+      title: "Current video",
+    });
+  });
+
+  it("ignores invalid context-menu targets", async () => {
+    const { runtime } = createRuntimeMock(undefined);
+    const contextMenuMock = createContextMenusMock();
+    registerQueueContextMenus({ runtime, contextMenus: contextMenuMock.contextMenus });
+
+    contextMenuMock.click({
+      menuItemId: "fluent-frame-enqueue-link-video",
+      pageUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    } as chrome.contextMenus.OnClickData);
+    contextMenuMock.click({
+      menuItemId: "fluent-frame-enqueue-link-video",
+      linkUrl: "https://www.youtube.com/results?search_query=football",
+    } as chrome.contextMenus.OnClickData);
+    contextMenuMock.click({
+      menuItemId: "another-extension-menu",
+      linkUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    } as chrome.contextMenus.OnClickData);
+
+    await Promise.resolve();
+    expect(runtime.sendNativeMessage).not.toHaveBeenCalled();
   });
 
   it("relays streaming process messages between a content port and the native host port", () => {
