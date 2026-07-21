@@ -129,7 +129,7 @@ export async function processVideo(
         subtitles: fallbackSubtitles,
         phrases: [],
       };
-  if (bestAgentOutput) {
+  if (successfulAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
     await deps.remoteCache?.writeResult(result).catch(() => undefined);
   }

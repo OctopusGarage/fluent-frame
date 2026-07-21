@@ -53,7 +53,7 @@ function queueErrorResponse(id: string, error: unknown): HostResponse {
 }
 
 export function isQueueReadyOutput(mode: ProcessVideoOutput["mode"]): boolean {
-  return mode === "generated" || mode === "cache" || mode === "remoteCache" || mode === "partialFallback";
+  return mode === "generated" || mode === "cache" || mode === "remoteCache";
 }
 
 async function processQueuedJob(config: HostConfig, logger: Logger, store: QueueStore, job: QueueJob): Promise<void> {

@@ -22,7 +22,7 @@ describe("queue worker startup", () => {
     expect(isQueueReadyOutput("cache")).toBe(true);
     expect(isQueueReadyOutput("remoteCache")).toBe(true);
     expect(isQueueReadyOutput("generated")).toBe(true);
-    expect(isQueueReadyOutput("partialFallback")).toBe(true);
+    expect(isQueueReadyOutput("partialFallback")).toBe(false);
     expect(isQueueReadyOutput("sourceFallback")).toBe(false);
   });
 

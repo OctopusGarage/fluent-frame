@@ -346,6 +346,43 @@ Second line.
     expect(processed.result.phrases).toHaveLength(1);
   });
 
+  it("does not persist partial fallback results as complete cache entries", async () => {
+    const processed = await processVideo("dQw4w9WgXcQ", "en", {
+      cacheDir: dir,
+      downloadCaptions: async () => `1
+00:00:00,000 --> 00:00:01,000
+First line.
+
+2
+00:00:01,000 --> 00:00:02,000
+Second line.
+`,
+      runAgent: async (_captionText, options) => {
+        await options?.onBatch?.({
+          completedBatches: 1,
+          totalBatches: 2,
+          output: {
+            subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "First line.", chinese: "第一句。", phraseIds: ["p1"] }],
+            phrases: [
+              {
+                id: "p1",
+                cueId: 1,
+                phrase: "first line",
+                meaningZh: "第一句",
+                explanationEn: "Opening sentence.",
+                difficulty: "basic" as const,
+              },
+            ],
+          },
+        });
+        throw new Error("Second batch failed");
+      },
+    });
+
+    expect(processed.mode).toBe("partialFallback");
+    await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+  });
+
   it("returns full source subtitles when the local agent fails or times out", async () => {
     const processed = await processVideo("dQw4w9WgXcQ", "en", {
       cacheDir: dir,
@@ -478,6 +515,50 @@ Generated sentence.
 
     expect(processed.mode).toBe("generated");
     expect(uploaded).toEqual([processed.result]);
+  });
+
+  it("does not upload partial fallback results to remote cache", async () => {
+    let uploads = 0;
+    const processed = await processVideo("dQw4w9WgXcQ", "en", {
+      cacheDir: dir,
+      remoteCache: {
+        readResult: async () => undefined,
+        writeResult: async () => {
+          uploads += 1;
+        },
+      },
+      downloadCaptions: async () => `1
+00:00:00,000 --> 00:00:01,000
+First line.
+
+2
+00:00:01,000 --> 00:00:02,000
+Second line.
+`,
+      runAgent: async (_captionText, options) => {
+        await options?.onBatch?.({
+          completedBatches: 1,
+          totalBatches: 2,
+          output: {
+            subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "First line.", chinese: "第一句。", phraseIds: ["p1"] }],
+            phrases: [
+              {
+                id: "p1",
+                cueId: 1,
+                phrase: "first line",
+                meaningZh: "第一句",
+                explanationEn: "Opening sentence.",
+                difficulty: "basic" as const,
+              },
+            ],
+          },
+        });
+        throw new Error("Second batch failed");
+      },
+    });
+
+    expect(processed.mode).toBe("partialFallback");
+    expect(uploads).toBe(0);
   });
 
   it("does not upload source-only fallback results to remote cache", async () => {
