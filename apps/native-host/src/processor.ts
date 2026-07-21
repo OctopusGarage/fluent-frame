@@ -1,18 +1,27 @@
 import { parseSrt, WORKFLOW_VERSION, type LearningSubtitleResult, type SubtitleCue } from "@fluent-frame/shared";
-import type { AgentBatchProgress, AgentRunner } from "./agentRunner.js";
-import { clearCachedResult, INVALID_CACHE_MESSAGE, readCachedResult, writeCachedResult } from "./cache.js";
+import type { AgentBatchProgress, AgentRunner } from "./agentTypes.js";
+import { clearCachedResult, readCacheEntry, writeCachedResult } from "./cache.js";
 import { assertAgentOutput } from "./resultValidation.js";
+
+export type ProcessVideoMode = "cache" | "generated" | "partialFallback" | "sourceFallback";
+
+export type ProcessVideoEvent =
+  | { type: "partialResult"; result: LearningSubtitleResult; completedBatches: number; totalBatches: number }
+  | { type: "fallback"; mode: Extract<ProcessVideoMode, "partialFallback" | "sourceFallback">; reason: string };
 
 export type ProcessVideoDeps = {
   cacheDir: string;
   downloadCaptions: (videoId: string, captionLanguage: string) => Promise<string>;
   runAgent: AgentRunner;
+  onEvent?: (event: ProcessVideoEvent) => Promise<void> | void;
   onPartialResult?: (result: LearningSubtitleResult, progress: AgentBatchProgress) => Promise<void> | void;
 };
 
 export type ProcessVideoOutput = {
   result: LearningSubtitleResult;
   cacheHit: boolean;
+  mode: ProcessVideoMode;
+  fallbackReason?: string;
 };
 
 function mergeWithSourceCues(captionText: string, subtitles: SubtitleCue[]): SubtitleCue[] {
@@ -64,15 +73,14 @@ export async function processVideo(
   captionLanguage: string,
   deps: ProcessVideoDeps,
 ): Promise<ProcessVideoOutput> {
-  const cached = await readCachedResult(deps.cacheDir, videoId, captionLanguage).catch(async (error: unknown) => {
-    if (error instanceof Error && error.message === INVALID_CACHE_MESSAGE) {
-      await clearCachedResult(deps.cacheDir, videoId, captionLanguage);
-      return undefined;
-    }
-    throw error;
-  });
-  if (cached) {
-    return { result: cached, cacheHit: true };
+  const cached = await readCacheEntry(deps.cacheDir, videoId, captionLanguage);
+  if (cached.status === "hit") {
+    return { result: cached.result, cacheHit: true, mode: "cache" };
+  }
+  if (cached.status === "corrupt") {
+    await clearCachedResult(deps.cacheDir, videoId, captionLanguage);
+  } else if (cached.status === "fatal") {
+    throw cached.error;
   }
 
   const captionText = await deps.downloadCaptions(videoId, captionLanguage);
@@ -85,10 +93,21 @@ export async function processVideo(
     async onBatch(progress) {
       lastSuccessfulAgentOutput = progress.output;
       const partialResult = buildLearningSubtitleResult(videoId, captionLanguage, captionText, progress.output);
+      await deps.onEvent?.({
+        type: "partialResult",
+        result: partialResult,
+        completedBatches: progress.completedBatches,
+        totalBatches: progress.totalBatches,
+      });
       await deps.onPartialResult?.(partialResult, progress);
     },
-  }).catch(() => undefined);
-  const bestAgentOutput = agentOutput ?? lastSuccessfulAgentOutput;
+  }).catch(async (error: unknown) => {
+    const reason = error instanceof Error ? error.message : "Local agent failed";
+    return { error: reason } as const;
+  });
+  const agentFailure = agentOutput && "error" in agentOutput ? agentOutput.error : undefined;
+  const successfulAgentOutput = agentOutput && !("error" in agentOutput) ? agentOutput : undefined;
+  const bestAgentOutput = successfulAgentOutput ?? lastSuccessfulAgentOutput;
   if (bestAgentOutput) {
     assertAgentOutput(bestAgentOutput);
   }
@@ -105,5 +124,9 @@ export async function processVideo(
   if (bestAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
   }
-  return { result, cacheHit: false };
+  const mode: ProcessVideoMode = successfulAgentOutput ? "generated" : bestAgentOutput ? "partialFallback" : "sourceFallback";
+  if (agentFailure && mode !== "generated") {
+    await deps.onEvent?.({ type: "fallback", mode, reason: agentFailure });
+  }
+  return { result, cacheHit: false, mode, ...(agentFailure && mode !== "generated" ? { fallbackReason: agentFailure } : {}) };
 }

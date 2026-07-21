@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseHostRequest, parseRequestId, parsePersonalNotes, parseYoutubeVideoId } from "../src/protocol.js";
+import { parseHostRequest, parseHostResponse, parseRequestId, parsePersonalNotes, parseYoutubeVideoId } from "../src/protocol.js";
 
 describe("parseYoutubeVideoId", () => {
   it("accepts normal YouTube IDs", () => {
@@ -127,5 +127,23 @@ describe("parseRequestId", () => {
     expect(() => parseRequestId("abc 123")).toThrow("Invalid request ID");
     expect(() => parseRequestId("abc\n123")).toThrow("Invalid request ID");
     expect(() => parseRequestId("abc\u0000123")).toThrow("Invalid request ID");
+  });
+});
+
+describe("parseHostResponse", () => {
+  it("rejects learning subtitle results with invalid nested cue data", () => {
+    expect(() => parseHostResponse("response1", {
+      id: "response1",
+      ok: true,
+      type: "result",
+      result: {
+        videoId: "dQw4w9WgXcQ",
+        sourceLanguage: "en",
+        workflowVersion: "test",
+        generatedAt: "2026-07-21T00:00:00.000Z",
+        subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Nice pass.", chinese: "传得漂亮。", phraseIds: ["missing"] }],
+        phrases: [],
+      },
+    })).toThrow("Invalid native host response");
   });
 });

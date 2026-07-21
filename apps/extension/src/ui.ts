@@ -3,13 +3,17 @@ import {
   type PersonalNote,
   type PhraseExplanation,
   type SubtitleCue,
-  type UsageNote,
 } from "@fluent-frame/shared";
+import { createDragController } from "./uiDrag.js";
+import {
+  renderLearningEventCard as createLearningEventCard,
+  renderPersonalNoteCard,
+  renderVideoNowCard,
+} from "./uiRenderers.js";
+import { compactProgressMessage, createCoachRoot } from "./uiTemplate.js";
+import { selectCaptionWindow, selectLearningEventWindow, unique, VISIBLE_SENTENCE_COUNT } from "./uiState.js";
 
 type LayoutMode = "panel" | "toolbar" | "drawer";
-type DragTarget = "panel" | "subtitle" | "videoNow";
-
-const VISIBLE_SENTENCE_COUNT = 3;
 
 export type CoachUiOptions = {
   onJumpToMs?: (startMs: number) => void;
@@ -38,139 +42,14 @@ function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
-}
-
-function findActiveCueIndex(cues: SubtitleCue[], currentMs: number): number {
-  for (let index = cues.length - 1; index >= 0; index -= 1) {
-    const cue = cues[index];
-    if (cue && cue.startMs <= currentMs && currentMs < cue.endMs) {
-      return index;
-    }
-  }
-  return -1;
-}
-
-function findCueWindow(cues: SubtitleCue[], activeIndex: number): SubtitleCue[] {
-  if (activeIndex < 0) {
-    return [];
-  }
-  const activeCue = cues[activeIndex];
-  if (!activeCue) {
-    return [];
-  }
-  const windowStart = Math.max(0, Math.min(activeIndex, cues.length - VISIBLE_SENTENCE_COUNT));
-  const window = cues.slice(windowStart, windowStart + VISIBLE_SENTENCE_COUNT);
-  while (window.length < VISIBLE_SENTENCE_COUNT && windowStart - (VISIBLE_SENTENCE_COUNT - window.length) >= 0) {
-    const previousCue = cues[windowStart - (VISIBLE_SENTENCE_COUNT - window.length)];
-    if (previousCue) {
-      window.unshift(previousCue);
-    } else {
-      break;
-    }
-  }
-  return window;
-}
-
 export function createCoachUi(doc: Document, options: CoachUiOptions = {}): CoachUi {
-  const root = doc.createElement("section");
-  root.id = "ff-root";
-  root.dataset.overlayHidden = "false";
-  root.dataset.layout = "panel";
-  root.dataset.panelCollapsed = "false";
-  root.dataset.hasResult = "false";
-  root.dataset.nowPaneHidden = "false";
-  root.dataset.nowSize = "medium";
-  root.innerHTML = `
-    <button id="ff-video-badge" type="button" aria-label="Open FluentFrame" title="FluentFrame">
-      <span class="ff-badge-glyph" aria-hidden="true">
-        <span class="ff-badge-spark"></span>
-        <span class="ff-badge-letter">A</span>
-      </span>
-    </button>
-    <div id="ff-overlay" aria-live="polite">
-      <div class="ff-caption-card" aria-label="Drag learning subtitles">
-        <div id="ff-english"></div>
-        <div id="ff-chinese"></div>
-      </div>
-    </div>
-    <aside id="ff-video-now" aria-label="Current learning events in video" data-now-size="medium" hidden></aside>
-    <aside id="ff-panel" aria-label="FluentFrame">
-      <div class="ff-header">
-        <div class="ff-drag-handle" aria-label="Drag panel">
-          <span aria-hidden="true"></span>
-        </div>
-        <div class="ff-brand">
-          <span class="ff-brand-mark" aria-hidden="true">A</span>
-          <div>
-            <div class="ff-title">FluentFrame</div>
-            <div class="ff-subtitle">Bilingual captions and learning notes</div>
-          </div>
-        </div>
-        <div id="ff-status">Ready</div>
-      </div>
-
-      <button id="ff-generate" class="ff-command ff-primary" type="button" aria-label="Generate learning subtitles">
-        <span class="ff-command-icon" aria-hidden="true">AI</span>
-        <span>
-          <span class="ff-command-title">Generate subtitles</span>
-          <span class="ff-command-meta">Translate and explain this video</span>
-        </span>
-      </button>
-      <div id="ff-progress" aria-live="polite" hidden></div>
-
-      <div class="ff-control-row">
-        <button id="ff-toggle-overlay" class="ff-quiet-button" type="button" aria-pressed="false">
-          <span aria-hidden="true">CC</span>
-          <span class="ff-command-title">Subtitles</span>
-          <span class="ff-command-meta">Visible</span>
-        </button>
-
-        <button id="ff-toggle-now" class="ff-quiet-button" type="button" aria-pressed="false">
-          <span aria-hidden="true">N</span>
-          <span class="ff-command-title">Now pane</span>
-          <span class="ff-command-meta">Visible</span>
-        </button>
-
-        <div class="ff-layout-switch" aria-label="Display style">
-          <button type="button" data-layout-option="panel" aria-pressed="true">Panel</button>
-          <button type="button" data-layout-option="toolbar" aria-pressed="false">Bar</button>
-          <button type="button" data-layout-option="drawer" aria-pressed="false">Study</button>
-        </div>
-
-        <div class="ff-layout-switch" aria-label="Now pane text size">
-          <button type="button" data-now-size="small" aria-pressed="false">Small</button>
-          <button type="button" data-now-size="medium" aria-pressed="true">Medium</button>
-          <button type="button" data-now-size="large" aria-pressed="false">Large</button>
-        </div>
-      </div>
-
-      <div class="ff-section-label" data-section-label="now">Now</div>
-      <div id="ff-current-phrase" aria-live="polite"></div>
-      <div class="ff-section-label" data-section-label="history">History</div>
-      <div id="ff-phrase-list"></div>
-      <div class="ff-section-label" data-section-label="notes">Personal Notes</div>
-      <div id="ff-notes-list" aria-live="polite"></div>
-    </aside>
-  `;
+  const root = createCoachRoot(doc);
 
   let result: LearningSubtitleResult | undefined;
   let sourceCues: SubtitleCue[] = [];
   let activeWindowKey = "";
   let personalNotes: PersonalNote[] = [];
   let attachedPlayer: HTMLElement | undefined;
-  let dragState:
-    | {
-        target: DragTarget;
-        startMouseX: number;
-        startMouseY: number;
-        startLeft: number;
-        startTop: number;
-        width: number;
-        height: number;
-      }
-    | undefined;
 
   function byId<T extends HTMLElement>(id: string): T {
     const element = root.querySelector(`#${id}`) ?? doc.getElementById(id);
@@ -201,13 +80,7 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
 
   function setProgressText(message?: string): void {
     const progress = byId("ff-progress");
-    const nextMessage = message?.startsWith("Generating learning subtitles... ETA about ")
-      ? message.replace("Generating learning subtitles... ", "")
-      : message === "Generating learning subtitles... ETA after first run"
-        ? "ETA after first successful run"
-        : message?.startsWith("Learning subtitles ready in ")
-          ? message.replace("Learning subtitles ready in ", "Ready in ")
-          : undefined;
+    const nextMessage = compactProgressMessage(message);
     progress.textContent = nextMessage ?? "";
     progress.hidden = !nextMessage;
   }
@@ -217,49 +90,6 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     root.querySelectorAll<HTMLButtonElement>("[data-layout-option]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.layoutOption === layout));
     });
-  }
-
-  function viewportSize(): { width: number; height: number } {
-    const win = doc.defaultView;
-    return {
-      width: win?.innerWidth ?? doc.documentElement.clientWidth,
-      height: win?.innerHeight ?? doc.documentElement.clientHeight,
-    };
-  }
-
-  function clamp(value: number, min: number, max: number): number {
-    return Math.min(Math.max(value, min), Math.max(min, max));
-  }
-
-  function moveDraggedElement(clientX: number, clientY: number): void {
-    if (!dragState) {
-      return;
-    }
-    const element = dragState.target === "panel"
-      ? byId("ff-panel")
-      : dragState.target === "videoNow"
-        ? byId("ff-video-now")
-        : byId("ff-overlay");
-    const viewport = viewportSize();
-    const nextLeft = clamp(dragState.startLeft + clientX - dragState.startMouseX, 8, viewport.width - dragState.width - 8);
-    const nextTop = clamp(dragState.startTop + clientY - dragState.startMouseY, 8, viewport.height - dragState.height - 8);
-    element.style.left = `${Math.round(nextLeft)}px`;
-    element.style.top = `${Math.round(nextTop)}px`;
-    element.style.right = "auto";
-    element.style.bottom = "auto";
-    if (dragState.target === "subtitle") {
-      element.style.transform = "none";
-      root.dataset.subtitleDragged = "true";
-    } else if (dragState.target === "videoNow") {
-      root.dataset.videoNowDragged = "true";
-    } else {
-      root.dataset.dragged = "true";
-    }
-  }
-
-  function endDrag(): void {
-    dragState = undefined;
-    root.removeAttribute("data-dragging");
   }
 
   function findPlayer(video?: HTMLVideoElement): HTMLElement | undefined {
@@ -325,37 +155,8 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     markActivePhrases(activePhraseIds);
   }
 
-  function findCueForPhrase(phrase: PhraseExplanation): SubtitleCue | undefined {
-    return result?.subtitles.find((subtitle) => subtitle.id === phrase.cueId);
-  }
-
   function learningEventWindow(currentMs: number): PhraseExplanation[] {
-    if (!result || result.phrases.length === 0) {
-      return [];
-    }
-    const events = result.phrases
-      .map((phrase) => ({ phrase, cue: findCueForPhrase(phrase) }))
-      .filter((event): event is { phrase: PhraseExplanation; cue: SubtitleCue } => Boolean(event.cue))
-      .sort((left, right) => left.cue.startMs - right.cue.startMs);
-    if (events.length === 0) {
-      return [];
-    }
-    const activeIndex = findActiveCueIndex(sourceCues, currentMs);
-    const anchorMs = activeIndex >= 0 ? sourceCues[activeIndex]?.startMs ?? currentMs : currentMs;
-    const nearbyEvents = events.filter((event) => event.cue.endMs > anchorMs);
-    const source = nearbyEvents.length > 0 ? nearbyEvents : events;
-    const firstFutureIndex = source.findIndex((event) => event.cue.startMs >= anchorMs);
-    const windowStart = Math.max(0, firstFutureIndex < 0 ? source.length - VISIBLE_SENTENCE_COUNT : firstFutureIndex);
-    const window = source.slice(windowStart, windowStart + VISIBLE_SENTENCE_COUNT);
-    while (window.length < VISIBLE_SENTENCE_COUNT && windowStart - (VISIBLE_SENTENCE_COUNT - window.length) >= 0) {
-      const previousEvent = source[windowStart - (VISIBLE_SENTENCE_COUNT - window.length)];
-      if (previousEvent) {
-        window.unshift(previousEvent);
-      } else {
-        break;
-      }
-    }
-    return window.map((event) => event.phrase);
+    return selectLearningEventWindow(result, currentMs);
   }
 
   function renderCurrentLearningEvents(currentMs: number): void {
@@ -372,113 +173,28 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
       videoNow.hidden = true;
       return;
     }
-    videoNow.replaceChildren(...phrases.map((phrase) => renderVideoNowCard(phrase)));
-  }
-
-  function renderVideoNowCard(phrase: PhraseExplanation): HTMLElement {
-    const item = doc.createElement("article");
-    const english = doc.createElement("div");
-    const chinese = doc.createElement("div");
-    item.className = "ff-video-now-item";
-    english.className = "ff-video-now-line ff-video-now-english";
-    english.textContent = phrase.phrase;
-    chinese.className = "ff-video-now-line ff-video-now-chinese";
-    chinese.textContent = phrase.meaningZh;
-    item.append(english, chinese);
-    return item;
-  }
-
-  function renderUsageNotes(notes: UsageNote[] | undefined): HTMLElement | undefined {
-    if (!notes || notes.length === 0) {
-      return undefined;
-    }
-    const list = doc.createElement("div");
-    list.className = "ff-usage-notes";
-    list.replaceChildren(
-      ...notes.map((note) => {
-        const item = doc.createElement("p");
-        const question = doc.createElement("strong");
-        question.textContent = `${note.question} `;
-        item.append(question, doc.createTextNode(note.explanation));
-        return item;
-      }),
-    );
-    return list;
+    videoNow.replaceChildren(...phrases.map((phrase) => renderVideoNowCard(doc, phrase)));
   }
 
   function renderLearningEventCard(phrase: PhraseExplanation, variant: "current" | "history"): HTMLElement {
-    const item = doc.createElement("article");
-    const phraseText = doc.createElement("div");
-    const meaning = doc.createElement("span");
-    const explanation = doc.createElement("p");
-    const context = doc.createElement("p");
-    const actions = doc.createElement("div");
-    const jump = doc.createElement("button");
-    const save = doc.createElement("button");
-    const cue = findCueForPhrase(phrase);
-    item.className = variant === "current" ? "ff-current-phrase-item" : "ff-phrase-item";
-    if (variant === "history") {
-      item.dataset.phraseId = phrase.id;
-      item.dataset.cueId = String(phrase.cueId);
-      item.dataset.known = "false";
-    }
-    phraseText.className = variant === "current" ? "ff-current-phrase-text" : "ff-phrase-text";
-    phraseText.textContent = phrase.phrase;
-    meaning.className = variant === "current" ? "ff-current-phrase-meaning" : "ff-phrase-meaning";
-    meaning.textContent = phrase.meaningZh;
-    explanation.className = variant === "current" ? "ff-current-phrase-explanation" : "ff-phrase-explanation";
-    explanation.textContent = phrase.explanationEn;
-    context.className = "ff-learning-context";
-    context.textContent = cue ? cue.english : "";
-    actions.className = variant === "current" ? "ff-current-actions" : "ff-phrase-actions";
-    jump.type = "button";
-    jump.dataset.action = variant === "current" ? "current-jump" : "jump";
-    jump.textContent = "Play";
-    jump.addEventListener("click", () => {
-      if (cue) {
-        options.onJumpToMs?.(cue.startMs);
-      }
-    });
-    save.type = "button";
-    save.className = "ff-note-button";
-    save.dataset.action = "note";
-    save.textContent = variant === "current" ? "Add note" : "Note";
-    save.addEventListener("click", () => {
-      if (cue) {
-        void addPersonalNote(cue, phrase);
-      }
-    });
-    if (variant === "history") {
-      const copy = doc.createElement("button");
-      const known = doc.createElement("button");
-      copy.type = "button";
-      copy.dataset.action = "copy";
-      copy.textContent = "Copy";
-      copy.addEventListener("click", () => {
-        void writeClipboard(phrase.phrase).then(() => {
+    const cue = result?.subtitles.find((subtitle) => subtitle.id === phrase.cueId);
+    return createLearningEventCard(doc, {
+      phrase,
+      variant,
+      cue,
+      onJump: (startMs) => {
+        options.onJumpToMs?.(startMs);
+      },
+      onSave: (cueToSave, phraseToSave) => {
+        void addPersonalNote(cueToSave, phraseToSave);
+      },
+      onCopy: (text) => {
+        void writeClipboard(text).then(() => {
           setStatusText("Phrase copied");
         });
-      });
-      known.type = "button";
-      known.dataset.action = "known";
-      known.textContent = "Mark known";
-      known.addEventListener("click", () => {
-        const nextKnown = item.dataset.known !== "true";
-        item.dataset.known = String(nextKnown);
-        known.textContent = nextKnown ? "Known" : "Mark known";
-        known.setAttribute("aria-pressed", String(nextKnown));
-      });
-      actions.append(jump, copy, save, known);
-    } else {
-      actions.append(jump, save);
-    }
-    const usageNotes = renderUsageNotes(phrase.usageNotes);
-    item.append(phraseText, meaning, explanation);
-    if (usageNotes) {
-      item.append(usageNotes);
-    }
-    item.append(context, actions);
-    return item;
+      },
+      onKnownChange: () => {},
+    });
   }
 
   function markActivePhrases(activeIds: string[]): void {
@@ -532,47 +248,15 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
       return;
     }
     list.replaceChildren(
-      ...personalNotes.map((note) => {
-        const item = doc.createElement("article");
-        const sentence = doc.createElement("div");
-        const chinese = doc.createElement("span");
-        const phrase = doc.createElement("div");
-        const explanation = doc.createElement("p");
-        const actions = doc.createElement("div");
-        const jump = doc.createElement("button");
-        const remove = doc.createElement("button");
-        item.className = "ff-note-item";
-        item.dataset.noteId = note.id;
-        sentence.className = "ff-note-sentence";
-        sentence.textContent = note.sentenceEnglish;
-        chinese.className = "ff-note-chinese";
-        chinese.textContent = note.sentenceChinese;
-        phrase.className = "ff-note-phrase";
-        phrase.textContent = `${note.phrase} · ${note.meaningZh}`;
-        explanation.className = "ff-note-explanation";
-        explanation.textContent = note.explanationEn;
-        actions.className = "ff-note-actions";
-        jump.type = "button";
-        jump.dataset.action = "note-jump";
-        jump.textContent = "Play";
-        jump.addEventListener("click", () => {
-          options.onJumpToMs?.(note.startMs);
-        });
-        remove.type = "button";
-        remove.dataset.action = "note-remove";
-        remove.textContent = "Remove";
-        remove.addEventListener("click", () => {
-          void removePersonalNote(note.id);
-        });
-        actions.append(jump, remove);
-        const usageNotes = renderUsageNotes(note.usageNotes);
-        item.append(sentence, chinese, phrase, explanation);
-        if (usageNotes) {
-          item.append(usageNotes);
-        }
-        item.append(actions);
-        return item;
-      }),
+      ...personalNotes.map((note) => renderPersonalNoteCard(doc, {
+        note,
+        onJump: (startMs) => {
+          options.onJumpToMs?.(startMs);
+        },
+        onRemove: (id) => {
+          void removePersonalNote(id);
+        },
+      })),
     );
   }
 
@@ -699,54 +383,7 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     });
   });
 
-  function startDrag(event: MouseEvent, target: DragTarget): void {
-    if (!(event instanceof MouseEvent) || event.button !== 0) {
-      return;
-    }
-    const element = target === "panel"
-      ? byId("ff-panel")
-      : target === "videoNow"
-        ? byId("ff-video-now")
-        : byId("ff-overlay");
-    const rect = element.getBoundingClientRect();
-    dragState = {
-      target,
-      startMouseX: event.clientX,
-      startMouseY: event.clientY,
-      startLeft: rect.left,
-      startTop: rect.top,
-      width: rect.width,
-      height: rect.height,
-    };
-    root.dataset.dragging = "true";
-    event.preventDefault();
-  }
-
-  byId("ff-panel").querySelector(".ff-header")?.addEventListener("mousedown", (event) => {
-    if (!(event instanceof MouseEvent)) {
-      return;
-    }
-    startDrag(event, "panel");
-  });
-
-  root.querySelector(".ff-caption-card")?.addEventListener("mousedown", (event) => {
-    if (!(event instanceof MouseEvent)) {
-      return;
-    }
-    startDrag(event, "subtitle");
-  });
-
-  byId("ff-video-now").addEventListener("mousedown", (event) => {
-    if (!(event instanceof MouseEvent)) {
-      return;
-    }
-    startDrag(event, "videoNow");
-  });
-
-  doc.addEventListener("mousemove", (event) => {
-    moveDraggedElement(event.clientX, event.clientY);
-  });
-  doc.addEventListener("mouseup", endDrag);
+  createDragController({ doc, root, byId }).bind();
 
   return {
     mount(parent) {
@@ -801,9 +438,7 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
       if (!result) {
         return;
       }
-      const activeIndex = findActiveCueIndex(sourceCues, currentMs);
-      const overlayCue = activeIndex >= 0 ? sourceCues[activeIndex] : undefined;
-      const window = findCueWindow(sourceCues, activeIndex);
+      const { activeCue: overlayCue, cues: window } = selectCaptionWindow(sourceCues, currentMs);
       const learningWindow = learningEventWindow(currentMs);
       const windowKey = `${overlayCue?.id ?? "none"}|${learningWindow.map((phrase) => phrase.id).join("|")}`;
       if (windowKey !== activeWindowKey) {

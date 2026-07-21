@@ -257,8 +257,8 @@ describe("background helpers", () => {
         sourceLanguage: "en",
         workflowVersion: "test",
         generatedAt: "2026-07-20T00:00:00.000Z",
-        subtitles: [],
-        phrases: [],
+        subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Nice pass.", chinese: "传得漂亮。", phraseIds: ["p1"] }],
+        phrases: [{ id: "p1", cueId: 1, phrase: "nice pass", meaningZh: "传得漂亮", explanationEn: "A good pass.", difficulty: "basic" }],
       },
       completedBatches: 1,
       totalBatches: 2,
@@ -280,8 +280,8 @@ describe("background helpers", () => {
         sourceLanguage: "en",
         workflowVersion: "test",
         generatedAt: "2026-07-20T00:00:01.000Z",
-        subtitles: [],
-        phrases: [],
+        subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Nice pass.", chinese: "传得漂亮。", phraseIds: ["p1"] }],
+        phrases: [{ id: "p1", cueId: 1, phrase: "nice pass", meaningZh: "传得漂亮", explanationEn: "A good pass.", difficulty: "basic" }],
       },
     });
     nativePort.emitDisconnect();
