@@ -33,7 +33,12 @@ export function createCoachRoot(doc: Document): HTMLElement {
             <div class="ff-subtitle">Bilingual captions and learning notes</div>
           </div>
         </div>
-        <div id="ff-status">Ready</div>
+        <div class="ff-header-actions">
+          <div id="ff-status">Ready</div>
+          <button id="ff-hide-panel" class="ff-icon-button" type="button" aria-label="Close FluentFrame pane" title="Close pane">
+            <span aria-hidden="true">X</span>
+          </button>
+        </div>
       </div>
 
       <button id="ff-generate" class="ff-command ff-primary" type="button" aria-label="Generate learning subtitles">
@@ -63,6 +68,12 @@ export function createCoachRoot(doc: Document): HTMLElement {
           <span aria-hidden="true">N</span>
           <span class="ff-command-title">Now pane</span>
           <span class="ff-command-meta">Visible</span>
+        </button>
+
+        <button id="ff-reset-layout" class="ff-quiet-button" type="button" aria-label="Reset FluentFrame layout">
+          <span aria-hidden="true">R</span>
+          <span class="ff-command-title">Reset layout</span>
+          <span class="ff-command-meta">Defaults</span>
         </button>
 
         <div class="ff-layout-switch" aria-label="Display style">

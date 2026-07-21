@@ -212,6 +212,18 @@ test("loads on YouTube SPA navigation and renders subtitles through native messa
     await page.goto("https://www.youtube.com/");
     await expect(page.locator("#ff-panel")).toBeVisible();
     await expect(page.locator("#ff-status")).toHaveText("Ready");
+    await expect(page.getByRole("button", { name: "Close FluentFrame pane" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset FluentFrame layout" })).toBeVisible();
+    await page.getByRole("button", { name: "Close FluentFrame pane" }).click();
+    await expect(page.locator("#ff-panel")).toBeHidden();
+    await page.reload();
+    await expect(page.locator("#ff-panel")).toBeHidden();
+    await page.getByRole("button", { name: "Show FluentFrame pane" }).click();
+    await page.getByRole("button", { name: "Reset FluentFrame layout" }).click();
+    await expect(page.locator("#ff-panel")).toBeVisible();
+    await page.getByRole("button", { name: "Hide FluentFrame pane" }).click();
+    await expect(page.locator("#ff-panel")).toBeHidden();
+    await page.getByRole("button", { name: "Show FluentFrame pane" }).click();
     await expect(page.locator(".ytp-right-controls > #ff-video-badge + .ytp-subtitles-button")).toHaveCount(1);
 
     await page.getByRole("button", { name: "Generate learning subtitles" }).click();
@@ -281,6 +293,8 @@ test("loads on YouTube SPA navigation and renders subtitles through native messa
 
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
     await expect(page.getByRole("button", { name: "Generate learning subtitles" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Hide/show page pane" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset page pane layout" })).toBeVisible();
     await expect(page.locator("#queue-summary")).toContainText("Ready 1");
     await expect(page.locator("#queue-summary")).toContainText("Failed 1");
     await expect(page.locator("#queue-list")).toContainText("Fixture learning video");

@@ -1,6 +1,7 @@
 import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
 import { createLogger } from "./logger.js";
+import { runVideoProcessingPipeline } from "./videoProcessingPipeline.js";
 
 type ProcessVideoRequest = Extract<HostRequest, { type: "processVideo" }>;
 
@@ -28,20 +29,9 @@ export async function handleProcessVideoRequest(
         progress: { stage: "download", message: "Downloading YouTube captions" },
       });
     }
-    const { createConfiguredRunner } = await import("./agentRunner.js");
-    const { downloadCaptions } = await import("./captionDownloader.js");
-    const { processVideo } = await import("./processor.js");
-    const { createRemoteCacheProvider } = await import("./remoteCache.js");
-    const runAgent = await createConfiguredRunner(config.agent, {
-      codexPath: config.codexPath,
-      claudePath: config.claudePath,
-    });
-    const remoteCache = createRemoteCacheProvider(config.remoteCache);
-    const output = await processVideo(request.videoId, request.captionLanguage, {
-      cacheDir: config.cacheDir,
-      ...(remoteCache ? { remoteCache } : {}),
-      downloadCaptions: (videoId, captionLanguage) => downloadCaptions(videoId, captionLanguage, config.ytDlpPath),
-      runAgent,
+    const output = await runVideoProcessingPipeline(config, {
+      videoId: request.videoId,
+      captionLanguage: request.captionLanguage,
       ...(request.stream
         ? {
             onEvent(event) {

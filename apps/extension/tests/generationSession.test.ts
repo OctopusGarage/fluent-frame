@@ -15,6 +15,8 @@ const result: LearningSubtitleResult = {
 function createUi(): CoachUi {
   return {
     mount: vi.fn(),
+    togglePanel: vi.fn(),
+    resetUiState: vi.fn(),
     setStatus: vi.fn(),
     setProgress: vi.fn(),
     setError: vi.fn(),

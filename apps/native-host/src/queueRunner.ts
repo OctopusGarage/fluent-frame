@@ -1,14 +1,21 @@
 import type { QueueJob } from "@fluent-frame/shared";
 import type { Logger } from "./logger.js";
-import type { QueueStore } from "./queueStore.js";
 
 export type QueueRunner = {
   start(): Promise<void>;
   isRunning(): boolean;
 };
 
+export type QueueWorkStore = {
+  recoverStaleRunningJobs(): Promise<void>;
+  claimNext(): Promise<QueueJob | undefined>;
+  touchRunning(jobId: string): Promise<QueueJob | undefined>;
+  markDone(jobId: string): Promise<QueueJob>;
+  markFailed(jobId: string, error: string): Promise<QueueJob>;
+};
+
 export type QueueRunnerDeps = {
-  store: QueueStore;
+  store: QueueWorkStore;
   logger?: Logger;
   processJob(job: QueueJob): Promise<void>;
   heartbeatIntervalMs?: number;

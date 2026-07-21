@@ -1,46 +1,22 @@
-import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { HostRequest, HostResponse, QueueJob, QueueState } from "@fluent-frame/shared";
-import { readCachedResult, writeCachedResult } from "./cache.js";
-import { createConfiguredRunner } from "./agentRunner.js";
-import { downloadCaptions } from "./captionDownloader.js";
+import type { HostRequest, HostResponse, QueueJob } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
-import { processVideo, type ProcessVideoOutput } from "./processor.js";
+import type { ProcessVideoOutput } from "./processor.js";
+import { createQueueCoordinator } from "./queueCoordinator.js";
 import { createQueueRunner, type QueueRunner } from "./queueRunner.js";
 import { createQueueStore, type QueueStore } from "./queueStore.js";
-import { fetchVideoTitle } from "./videoMetadata.js";
 import { createLogger, type Logger } from "./logger.js";
-import { createRemoteCacheProvider } from "./remoteCache.js";
+import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
+import { startDetachedQueueWorker, startQueue, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
+import { runVideoProcessingPipeline } from "./videoProcessingPipeline.js";
 
 type EnqueueVideoRequest = Extract<HostRequest, { type: "enqueueVideo" }>;
 type GetQueueRequest = Extract<HostRequest, { type: "getQueue" }>;
 type RemoveQueueJobRequest = Extract<HostRequest, { type: "removeQueueJob" }>;
 type RetryQueueJobRequest = Extract<HostRequest, { type: "retryQueueJob" }>;
 
+export { startDetachedQueueWorker, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
+
 const runners = new Map<string, QueueRunner>();
-
-type DetachedQueueWorkerProcess = {
-  unref(): void;
-};
-
-export type DetachedQueueWorkerDeps = {
-  entrypointPath?: string;
-  env?: NodeJS.ProcessEnv;
-  spawnDetached?: (
-    command: string,
-    args: string[],
-    options: {
-      detached: true;
-      stdio: "ignore";
-      env: NodeJS.ProcessEnv;
-    },
-  ) => DetachedQueueWorkerProcess;
-};
-
-function defaultEntrypointPath(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), "index.js");
-}
 
 function queueErrorResponse(id: string, error: unknown): HostResponse {
   return {
@@ -66,16 +42,9 @@ async function processQueuedJob(config: HostConfig, logger: Logger, store: Queue
     videoId: job.videoId,
     details: { captionLanguage: job.captionLanguage, title: job.title },
   });
-  const runAgent = await createConfiguredRunner(config.agent, {
-    codexPath: config.codexPath,
-    claudePath: config.claudePath,
-  });
-  const remoteCache = createRemoteCacheProvider(config.remoteCache);
-  const output = await processVideo(job.videoId, job.captionLanguage, {
-    cacheDir: config.cacheDir,
-    ...(remoteCache ? { remoteCache } : {}),
-    downloadCaptions: (videoId, captionLanguage) => downloadCaptions(videoId, captionLanguage, config.ytDlpPath),
-    runAgent,
+  const output = await runVideoProcessingPipeline(config, {
+    videoId: job.videoId,
+    captionLanguage: job.captionLanguage,
     async onPartialResult(_result, progress) {
       await store.markProgress(job.id, {
         completedBatches: progress.completedBatches,
@@ -140,143 +109,47 @@ export async function runQueueWorker(config: HostConfig): Promise<void> {
   await queueRunner(config).start();
 }
 
-export async function startDetachedQueueWorker(config: HostConfig, deps: DetachedQueueWorkerDeps = {}): Promise<void> {
-  const entrypointPath = deps.entrypointPath ?? defaultEntrypointPath();
-  const child = (deps.spawnDetached ?? spawn)(process.execPath, [entrypointPath], {
-    detached: true,
-    stdio: "ignore",
-    env: {
-      ...(deps.env ?? process.env),
-      FF_QUEUE_WORKER: "1",
-      FF_AGENT: config.agent,
-      FF_CACHE_DIR: config.cacheDir,
-      FF_NOTES_FILE: config.notesFile,
-      FF_QUEUE_FILE: config.queueFile,
-      FF_LOG_FILE: config.logFile,
-      FF_YTDLP_PATH: config.ytDlpPath,
-      FF_CODEX_PATH: config.codexPath,
-      FF_CLAUDE_PATH: config.claudePath,
-      ...(config.remoteCache.enabled
-        ? {
-            FF_REMOTE_CACHE_PROVIDER: config.remoteCache.provider,
-            FF_REMOTE_CACHE_OWNER: config.remoteCache.owner,
-            FF_REMOTE_CACHE_REPO: config.remoteCache.repo,
-            FF_REMOTE_CACHE_BRANCH: config.remoteCache.branch,
-            FF_REMOTE_CACHE_BASE_PATH: config.remoteCache.basePath,
-            FF_REMOTE_CACHE_WRITE_ENABLED: String(config.remoteCache.writeEnabled),
-            ...(config.remoteCache.tokenEnv ? { FF_REMOTE_CACHE_TOKEN_ENV: config.remoteCache.tokenEnv } : {}),
-            ...(config.remoteCache.tokenEnv && config.remoteCache.token ? { [config.remoteCache.tokenEnv]: config.remoteCache.token } : {}),
-          }
-        : {}),
-    },
-  });
-  child.unref();
-}
-
-function startQueue(config: HostConfig): void {
-  void startDetachedQueueWorker(config).catch(async (error: unknown) => {
-    await createLogger(config.logFile).log({
-      level: "error",
-      component: "queueWorker",
-      event: "worker.startFailed",
-      message: "Failed to start detached queue worker",
-      details: { error },
-    });
-  });
-}
-
-async function cacheReady(config: HostConfig, request: EnqueueVideoRequest): Promise<boolean> {
-  try {
-    if (await readCachedResult(config.cacheDir, request.videoId, request.captionLanguage)) {
-      return true;
-    }
-    const remoteResult = await createRemoteCacheProvider(config.remoteCache)?.readResult(
-      request.videoId,
-      request.captionLanguage,
-    );
-    if (!remoteResult) {
-      return false;
-    }
-    await writeCachedResult(config.cacheDir, remoteResult);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolveVideoTitle(config: HostConfig, videoId: string, title: string | undefined): Promise<string | undefined> {
-  if (title?.trim()) {
-    return title.trim();
-  }
-  const logger = createLogger(config.logFile);
-  try {
-    const resolved = await fetchVideoTitle(videoId, config.ytDlpPath);
-    await logger.log({
-      level: resolved ? "info" : "warn",
-      component: "videoMetadata",
-      event: resolved ? "title.resolved" : "title.empty",
-      message: resolved ? "Resolved YouTube video title" : "YouTube title metadata was empty",
-      videoId,
-      details: { title: resolved },
-    });
-    return resolved;
-  } catch (error) {
-    await logger.log({
-      level: "warn",
-      component: "videoMetadata",
-      event: "title.failed",
-      message: "Failed to resolve YouTube video title",
-      videoId,
-      details: { error },
-    });
-    return undefined;
-  }
-}
-
-async function enrichMissingQueueTitles(config: HostConfig, store: QueueStore): Promise<QueueState> {
-  let queue = await store.getQueue();
-  for (const job of queue.jobs.filter((candidate) => !candidate.title).slice(0, 8)) {
-    const title = await resolveVideoTitle(config, job.videoId, undefined);
-    if (title) {
-      await store.enqueue({
-        videoId: job.videoId,
-        captionLanguage: job.captionLanguage,
-        ...(job.url ? { url: job.url } : {}),
-        title,
-      });
-    }
-  }
-  queue = await store.getQueue();
-  return queue;
-}
-
 export function createQueueRequestHandler(config: HostConfig) {
   const logger = createLogger(config.logFile);
   const store = createQueueStore(config.queueFile);
-  return {
-    async enqueueVideo(request: EnqueueVideoRequest): Promise<HostResponse> {
-      try {
-        const title = await resolveVideoTitle(config, request.videoId, request.title);
-        const { job, message } = await store.enqueue({
-          videoId: request.videoId,
-          captionLanguage: request.captionLanguage,
-          ...(request.url ? { url: request.url } : {}),
-          ...(title ? { title } : {}),
-          cacheReady: await cacheReady(config, request),
-        });
+  function requestCoordinator(requestId: string) {
+    return createQueueCoordinator({
+      store,
+      cacheReady: (input) => cacheReady(config, input),
+      resolveTitle: (videoId, title) => resolveVideoTitle(config, videoId, title),
+      startQueue: () => startQueue(config),
+      async log({ event, message, job, queue, jobId }) {
         await logger.log({
           level: "info",
           component: "queue",
-          event: "job.enqueued",
+          event,
           message,
-          requestId: request.id,
-          jobId: job.id,
-          videoId: job.videoId,
-          details: { status: job.status, title: job.title, url: job.url },
+          requestId,
+          ...(job ? { jobId: job.id, videoId: job.videoId } : {}),
+          ...(jobId ? { jobId } : {}),
+          details: {
+            ...(job ? { status: job.status, title: job.title, url: job.url } : {}),
+            ...(queue
+              ? {
+                  jobs: queue.jobs.length,
+                  runningJobId: queue.runningJobId,
+                  queued: queue.jobs.filter((candidate) => candidate.status === "queued").length,
+                }
+              : {}),
+          },
         });
-        if (job.status === "queued") {
-          startQueue(config);
-        }
+      },
+    });
+  }
+  return {
+    async enqueueVideo(request: EnqueueVideoRequest): Promise<HostResponse> {
+      try {
+        const { job, message } = await requestCoordinator(request.id).enqueueVideo({
+          videoId: request.videoId,
+          captionLanguage: request.captionLanguage,
+          ...(request.url ? { url: request.url } : {}),
+          ...(request.title ? { title: request.title } : {}),
+        });
         return { id: request.id, ok: true, type: "queueJob", job, message };
       } catch (error) {
         return queueErrorResponse(request.id, error);
@@ -284,23 +157,7 @@ export function createQueueRequestHandler(config: HostConfig) {
     },
     async getQueue(request: GetQueueRequest): Promise<HostResponse> {
       try {
-        await store.recoverStaleRunningJobs();
-        const queue = await enrichMissingQueueTitles(config, store);
-        if (!queue.runningJobId && queue.jobs.some((job) => job.status === "queued")) {
-          startQueue(config);
-        }
-        await logger.log({
-          level: "info",
-          component: "queue",
-          event: "queue.read",
-          message: "Read learning subtitle queue",
-          requestId: request.id,
-          details: {
-            jobs: queue.jobs.length,
-            runningJobId: queue.runningJobId,
-            queued: queue.jobs.filter((job) => job.status === "queued").length,
-          },
-        });
+        const queue = await requestCoordinator(request.id).getQueue();
         return { id: request.id, ok: true, type: "queue", queue };
       } catch (error) {
         return queueErrorResponse(request.id, error);
@@ -308,16 +165,7 @@ export function createQueueRequestHandler(config: HostConfig) {
     },
     async removeQueueJob(request: RemoveQueueJobRequest): Promise<HostResponse> {
       try {
-        const queue = await store.remove(request.jobId);
-        await logger.log({
-          level: "info",
-          component: "queue",
-          event: "job.removed",
-          message: "Removed learning subtitle queue job",
-          requestId: request.id,
-          jobId: request.jobId,
-          details: { jobs: queue.jobs.length },
-        });
+        const queue = await requestCoordinator(request.id).removeJob(request.jobId);
         return { id: request.id, ok: true, type: "queue", queue };
       } catch (error) {
         return queueErrorResponse(request.id, error);
@@ -325,18 +173,7 @@ export function createQueueRequestHandler(config: HostConfig) {
     },
     async retryQueueJob(request: RetryQueueJobRequest): Promise<HostResponse> {
       try {
-        const { job, message } = await store.retry(request.jobId);
-        await logger.log({
-          level: "info",
-          component: "queue",
-          event: "job.retry",
-          message,
-          requestId: request.id,
-          jobId: job.id,
-          videoId: job.videoId,
-          details: { status: job.status, title: job.title },
-        });
-        startQueue(config);
+        const { job, message } = await requestCoordinator(request.id).retryJob(request.jobId);
         return { id: request.id, ok: true, type: "queueJob", job, message };
       } catch (error) {
         return queueErrorResponse(request.id, error);

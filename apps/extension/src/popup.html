@@ -54,6 +54,13 @@
         margin-bottom: 10px;
         font-weight: 620;
       }
+      #toggle-page-pane,
+      #reset-page-pane {
+        width: 100%;
+        padding: 9px 12px;
+        margin-bottom: 10px;
+        font-weight: 620;
+      }
       form {
         display: flex;
         gap: 6px;
@@ -176,6 +183,8 @@
       <button id="refresh-health" type="button" title="Refresh setup status">↻</button>
     </header>
     <button id="generate" type="button">Generate learning subtitles</button>
+    <button id="toggle-page-pane" type="button">Hide/show page pane</button>
+    <button id="reset-page-pane" type="button">Reset page pane layout</button>
     <button id="enqueue-current" type="button">Add current video to queue</button>
     <form id="enqueue-url-form">
       <input id="enqueue-url" type="url" placeholder="Paste YouTube URL" />

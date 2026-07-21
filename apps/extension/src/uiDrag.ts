@@ -8,6 +8,7 @@ type DragControllerDeps = {
   doc: Document;
   root: HTMLElement;
   byId<T extends HTMLElement>(id: string): T;
+  onChange?: () => void;
 };
 
 type DragState = {
@@ -24,7 +25,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
-export function createDragController({ doc, root, byId }: DragControllerDeps): DragController {
+export function createDragController({ doc, root, byId, onChange }: DragControllerDeps): DragController {
   let dragState: DragState | undefined;
 
   function viewportSize(): { width: number; height: number } {
@@ -63,6 +64,7 @@ export function createDragController({ doc, root, byId }: DragControllerDeps): D
     } else {
       root.dataset.dragged = "true";
     }
+    onChange?.();
   }
 
   function endDrag(): void {

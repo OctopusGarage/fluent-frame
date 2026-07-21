@@ -154,8 +154,13 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   ui.mount(doc.body);
 
   function reconcilePlayerUi(): void {
+    if (!page.currentVideoId()) {
+      ui.attachPlayerButton();
+      return;
+    }
     const video = page.mainVideo();
     if (!video) {
+      ui.attachPlayerButton();
       return;
     }
     ui.attachPlayerButton(video);
@@ -184,9 +189,20 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     });
   }
 
-  function bindPopupGenerateListener(): void {
+  function bindPopupMessageListener(): void {
     runtime.onMessage?.addListener((message: unknown) => {
-      if (!message || typeof message !== "object" || (message as { type?: unknown }).type !== "popupGenerate") {
+      if (!message || typeof message !== "object") {
+        return;
+      }
+      if ((message as { type?: unknown }).type === "popupTogglePanel") {
+        ui.togglePanel();
+        return;
+      }
+      if ((message as { type?: unknown }).type === "popupResetUi") {
+        ui.resetUiState();
+        return;
+      }
+      if ((message as { type?: unknown }).type !== "popupGenerate") {
         return;
       }
       const videoId = page.currentVideoId();
@@ -245,7 +261,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   }
 
   bindGenerateButton();
-  bindPopupGenerateListener();
+  bindPopupMessageListener();
   startPlayerObserver();
   startSyncLoop();
   startNavigationLoop();

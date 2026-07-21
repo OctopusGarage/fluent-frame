@@ -178,6 +178,68 @@ describe("bootstrapContentScript", () => {
     );
   });
 
+  it("toggles the FluentFrame pane from the extension popup message", () => {
+    let listener: ((message: unknown) => void) | undefined;
+    const runtime = {
+      lastError: undefined,
+      sendMessage: vi.fn((_message: unknown, callback: (response: unknown) => void) => {
+        if ((_message as { type?: string }).type === "getPersonalNotes") {
+          callback({ id: "notes-1", ok: true, type: "personalNotes", notes: [] });
+          return;
+        }
+        callback({ id: "request-1", ok: true, type: "result", result });
+      }),
+      onMessage: {
+        addListener: vi.fn((nextListener: (message: unknown) => void) => {
+          listener = nextListener;
+        }),
+      },
+    };
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime as unknown as ContentScriptRuntime);
+
+    listener?.({ type: "popupTogglePanel" });
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("true");
+    expect(document.getElementById("ff-panel")?.getAttribute("aria-hidden")).toBe("true");
+
+    listener?.({ type: "popupTogglePanel" });
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
+    expect(document.getElementById("ff-panel")?.hasAttribute("aria-hidden")).toBe(false);
+  });
+
+  it("resets FluentFrame pane preferences from the extension popup message", () => {
+    let listener: ((message: unknown) => void) | undefined;
+    const runtime = {
+      lastError: undefined,
+      sendMessage: vi.fn((_message: unknown, callback: (response: unknown) => void) => {
+        if ((_message as { type?: string }).type === "getPersonalNotes") {
+          callback({ id: "notes-1", ok: true, type: "personalNotes", notes: [] });
+          return;
+        }
+        callback({ id: "request-1", ok: true, type: "result", result });
+      }),
+      onMessage: {
+        addListener: vi.fn((nextListener: (message: unknown) => void) => {
+          listener = nextListener;
+        }),
+      },
+    };
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime as unknown as ContentScriptRuntime);
+    document.querySelector<HTMLButtonElement>("#ff-hide-panel")?.click();
+    document.querySelector<HTMLButtonElement>('[data-layout-option="drawer"]')?.click();
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("true");
+    expect(document.getElementById("ff-root")?.dataset.layout).toBe("drawer");
+
+    listener?.({ type: "popupResetUi" });
+
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
+    expect(document.getElementById("ff-root")?.dataset.layout).toBe("panel");
+    expect(document.getElementById("ff-panel")?.hasAttribute("aria-hidden")).toBe(false);
+  });
+
   it("adds the current watch video to the generation queue", () => {
     const runtime = {
       lastError: undefined,
@@ -753,6 +815,88 @@ describe("bootstrapContentScript", () => {
     expect(controls.children[0]).toBe(badge);
     expect(controls.children[1]).toBe(ccButton);
     expect(document.getElementById("ff-overlay")?.parentElement).toBe(player);
+  });
+
+  it("keeps the pane toggle available after navigating away from a watch player", () => {
+    const runtime = createRuntime();
+    let syncLoop: (() => void) | undefined;
+    const win = {
+      setInterval: vi.fn((callback: () => void, ms?: number) => {
+        if (ms === 50) {
+          syncLoop = callback;
+        }
+        return 1;
+      }),
+    } as unknown as Window;
+    const player = document.createElement("div");
+    const video = document.createElement("video");
+    const controls = document.createElement("div");
+    player.className = "html5-video-player playing-mode";
+    controls.className = "ytp-right-controls";
+    player.append(video, controls);
+    document.body.appendChild(player);
+
+    bootstrapContentScript(document, win, runtime);
+    syncLoop?.();
+    expect(document.querySelector<HTMLButtonElement>("#ff-video-badge")?.parentElement).toBe(controls);
+
+    player.remove();
+    syncLoop?.();
+
+    const badge = document.querySelector<HTMLButtonElement>("#ff-video-badge");
+    expect(badge?.parentElement?.id).toBe("ff-root");
+    expect(badge?.classList.contains("ff-in-player-controls")).toBe(false);
+
+    badge?.click();
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("true");
+    badge?.click();
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
+  });
+
+  it("restores the pane toggle when only a zero-size list preview video remains", () => {
+    const runtime = createRuntime();
+    let syncLoop: (() => void) | undefined;
+    const win = {
+      setInterval: vi.fn((callback: () => void, ms?: number) => {
+        if (ms === 50) {
+          syncLoop = callback;
+        }
+        return 1;
+      }),
+    } as unknown as Window;
+    const player = document.createElement("div");
+    const watchVideo = document.createElement("video");
+    const controls = document.createElement("div");
+    const previewVideo = document.createElement("video");
+    player.className = "html5-video-player playing-mode";
+    controls.className = "ytp-right-controls";
+    player.append(watchVideo, controls);
+    document.body.appendChild(player);
+
+    bootstrapContentScript(document, win, runtime);
+    syncLoop?.();
+    expect(document.querySelector<HTMLButtonElement>("#ff-video-badge")?.parentElement).toBe(controls);
+
+    previewVideo.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      toJSON: () => ({}),
+    });
+    player.remove();
+    document.body.appendChild(previewVideo);
+    syncLoop?.();
+
+    const badge = document.querySelector<HTMLButtonElement>("#ff-video-badge");
+    expect(badge?.parentElement?.id).toBe("ff-root");
+    expect(badge?.classList.contains("ff-in-player-controls")).toBe(false);
+    expect(badge?.style.right).toBe("");
+    expect(badge?.style.bottom).toBe("");
   });
 
   it("syncs subtitles from the main YouTube player instead of an earlier preview video", () => {

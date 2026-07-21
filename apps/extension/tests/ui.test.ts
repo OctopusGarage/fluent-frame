@@ -106,6 +106,7 @@ const sparsePhraseResult: LearningSubtitleResult = {
 describe("createCoachUi", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+    window.localStorage.clear();
     Element.prototype.scrollIntoView = vi.fn();
   });
 
@@ -406,6 +407,23 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-root")?.dataset.overlayHidden).toBe("false");
   });
 
+  it("hides the full FluentFrame pane from the panel header and restores it from the badge", () => {
+    const ui = createCoachUi(document);
+    ui.mount(document.body);
+
+    document.querySelector<HTMLButtonElement>("#ff-hide-panel")?.click();
+
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("true");
+    expect(document.getElementById("ff-panel")?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelector<HTMLButtonElement>("#ff-video-badge")?.getAttribute("aria-label")).toBe("Show FluentFrame pane");
+
+    document.querySelector<HTMLButtonElement>("#ff-video-badge")?.click();
+
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
+    expect(document.getElementById("ff-panel")?.hasAttribute("aria-hidden")).toBe(false);
+    expect(document.querySelector<HTMLButtonElement>("#ff-video-badge")?.getAttribute("aria-label")).toBe("Hide FluentFrame pane");
+  });
+
   it("toggles the in-video Now pane and changes its text size independently", () => {
     const ui = createCoachUi(document);
     const player = document.createElement("div");
@@ -564,6 +582,94 @@ describe("createCoachUi", () => {
     expect(panel?.style.right).toBe("auto");
     expect(panel?.style.bottom).toBe("auto");
     expect(document.getElementById("ff-root")?.dataset.dragged).toBe("true");
+  });
+
+  it("restores pane visibility, display choices, and dragged positions after remounting", () => {
+    const firstUi = createCoachUi(document);
+    firstUi.mount(document.body);
+    const firstPanel = document.getElementById("ff-panel");
+    const firstHeader = document.querySelector<HTMLElement>(".ff-header");
+    vi.spyOn(firstPanel as HTMLElement, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 120,
+      top: 120,
+      left: 100,
+      right: 436,
+      bottom: 420,
+      width: 336,
+      height: 300,
+      toJSON: () => ({}),
+    });
+
+    document.querySelector<HTMLButtonElement>("#ff-hide-panel")?.click();
+    document.querySelector<HTMLButtonElement>("#ff-toggle-overlay")?.click();
+    document.querySelector<HTMLButtonElement>("#ff-toggle-now")?.click();
+    document.querySelector<HTMLButtonElement>('[data-layout-option="drawer"]')?.click();
+    document.querySelector<HTMLButtonElement>('[data-now-size="large"]')?.click();
+    firstHeader?.dispatchEvent(new MouseEvent("mousedown", { clientX: 130, clientY: 150, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mousemove", { clientX: 180, clientY: 190, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    document.body.replaceChildren();
+    const secondUi = createCoachUi(document);
+    secondUi.mount(document.body);
+
+    const secondPanel = document.getElementById("ff-panel");
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("true");
+    expect(document.getElementById("ff-root")?.dataset.overlayHidden).toBe("true");
+    expect(document.getElementById("ff-root")?.dataset.nowPaneHidden).toBe("true");
+    expect(document.getElementById("ff-root")?.dataset.layout).toBe("drawer");
+    expect(document.getElementById("ff-video-now")?.dataset.nowSize).toBe("large");
+    expect(secondPanel?.style.left).toBe("150px");
+    expect(secondPanel?.style.top).toBe("160px");
+    expect(secondPanel?.style.right).toBe("auto");
+    expect(secondPanel?.style.bottom).toBe("auto");
+    expect(document.querySelector<HTMLButtonElement>("#ff-video-badge")?.getAttribute("aria-label")).toBe("Show FluentFrame pane");
+  });
+
+  it("resets saved layout choices and positions back to defaults", () => {
+    const firstUi = createCoachUi(document);
+    firstUi.mount(document.body);
+    const panel = document.getElementById("ff-panel");
+    const header = document.querySelector<HTMLElement>(".ff-header");
+    vi.spyOn(panel as HTMLElement, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 120,
+      top: 120,
+      left: 100,
+      right: 436,
+      bottom: 420,
+      width: 336,
+      height: 300,
+      toJSON: () => ({}),
+    });
+
+    document.querySelector<HTMLButtonElement>("#ff-hide-panel")?.click();
+    document.querySelector<HTMLButtonElement>("#ff-toggle-overlay")?.click();
+    document.querySelector<HTMLButtonElement>("#ff-toggle-now")?.click();
+    document.querySelector<HTMLButtonElement>('[data-layout-option="drawer"]')?.click();
+    document.querySelector<HTMLButtonElement>('[data-now-size="large"]')?.click();
+    header?.dispatchEvent(new MouseEvent("mousedown", { clientX: 130, clientY: 150, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mousemove", { clientX: 180, clientY: 190, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+    document.querySelector<HTMLButtonElement>("#ff-reset-layout")?.click();
+
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
+    expect(document.getElementById("ff-root")?.dataset.overlayHidden).toBe("false");
+    expect(document.getElementById("ff-root")?.dataset.nowPaneHidden).toBe("false");
+    expect(document.getElementById("ff-root")?.dataset.layout).toBe("panel");
+    expect(document.getElementById("ff-video-now")?.dataset.nowSize).toBe("medium");
+    expect(document.getElementById("ff-root")?.dataset.dragged).toBeUndefined();
+    expect(panel?.style.left).toBe("");
+    expect(panel?.style.top).toBe("");
+
+    document.body.replaceChildren();
+    createCoachUi(document).mount(document.body);
+
+    expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
+    expect(document.getElementById("ff-root")?.dataset.layout).toBe("panel");
+    expect(document.getElementById("ff-panel")?.style.left).toBe("");
   });
 
   it("drags the subtitle overlay independently from the panel", () => {

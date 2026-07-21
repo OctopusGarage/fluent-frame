@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WORKFLOW_VERSION, type QueueJob } from "@fluent-frame/shared";
-import { createQueueRunner } from "../src/queueRunner.js";
-import type { QueueStore } from "../src/queueStore.js";
+import { createQueueRunner, type QueueWorkStore } from "../src/queueRunner.js";
 
 function job(videoId: string): QueueJob {
   return {
@@ -15,21 +14,9 @@ function job(videoId: string): QueueJob {
   };
 }
 
-function createMemoryStore(jobs: QueueJob[]): QueueStore {
+function createMemoryStore(jobs: QueueJob[]): QueueWorkStore {
   let running = false;
   return {
-    async enqueue() {
-      throw new Error("not used");
-    },
-    async getQueue() {
-      return { paused: false, jobs };
-    },
-    async remove() {
-      return { paused: false, jobs };
-    },
-    async retry() {
-      throw new Error("not used");
-    },
     async recoverStaleRunningJobs() {
       running = false;
     },
