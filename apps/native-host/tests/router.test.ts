@@ -1,10 +1,17 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
-import { writeCachedResult } from "../src/cache.js";
+import { readCachedResult, writeCachedResult } from "../src/cache.js";
 import { handleRequest } from "../src/index.js";
+
+const originalEnv = { ...process.env };
+
+afterEach(() => {
+  process.env = { ...originalEnv };
+  vi.unstubAllGlobals();
+});
 
 describe("handleRequest", () => {
   it("returns status", async () => {
@@ -342,6 +349,81 @@ writeFileSync(join(process.cwd(), "dQw4w9WgXcQ.en.srt"), "1\\n00:00:00,000 --> 0
       } else {
         process.env.FF_CODEX_PATH = previousCodexPath;
       }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("marks an enqueued video ready when GitHub remote cache already has the result", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-remote-cache-"));
+    const cacheDir = join(dir, "cache");
+    const queueFile = join(dir, "queue", "jobs.json");
+    const remoteResult: LearningSubtitleResult = {
+      videoId: "dQw4w9WgXcQ",
+      sourceLanguage: "en",
+      workflowVersion: WORKFLOW_VERSION,
+      generatedAt: "2026-07-21T00:00:00.000Z",
+      subtitles: [
+        {
+          id: 1,
+          startMs: 0,
+          endMs: 1000,
+          english: "Remote queue sentence.",
+          chinese: "远程队列句子。",
+          phraseIds: ["p1"],
+        },
+      ],
+      phrases: [
+        {
+          id: "p1",
+          cueId: 1,
+          phrase: "remote queue sentence",
+          meaningZh: "远程队列句子",
+          explanationEn: "A queue result loaded from GitHub cache.",
+          difficulty: "basic",
+        },
+      ],
+    };
+    await mkdir(join(dir, ".fluent-frame"), { recursive: true });
+    await writeFile(join(dir, ".fluent-frame", "config.json"), JSON.stringify({
+      remoteCache: {
+        enabled: true,
+        provider: "github",
+        owner: "octo",
+        repo: "cache",
+        branch: "main",
+        basePath: "data/youtube",
+        writeEnabled: false,
+      },
+    }), "utf8");
+    process.env.HOME = dir;
+    process.env.FF_CACHE_DIR = cacheDir;
+    process.env.FF_QUEUE_FILE = queueFile;
+    process.env.FF_LOG_FILE = join(dir, "native-host.log");
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({
+      content: Buffer.from(JSON.stringify(remoteResult), "utf8").toString("base64"),
+      encoding: "base64",
+      sha: "remote-sha",
+    })));
+
+    try {
+      await expect(handleRequest({
+        id: "queue-remote-1",
+        type: "enqueueVideo",
+        videoId: "dQw4w9WgXcQ",
+        captionLanguage: "en",
+        title: "Remote cached video",
+      })).resolves.toMatchObject({
+        id: "queue-remote-1",
+        ok: true,
+        type: "queueJob",
+        message: "Already ready",
+        job: {
+          status: "done",
+          title: "Remote cached video",
+        },
+      });
+      await expect(readCachedResult(cacheDir, "dQw4w9WgXcQ", "en")).resolves.toEqual(remoteResult);
+    } finally {
       await rm(dir, { recursive: true, force: true });
     }
   });

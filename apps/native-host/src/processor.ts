@@ -1,9 +1,10 @@
 import { parseSrt, WORKFLOW_VERSION, type LearningSubtitleResult, type SubtitleCue } from "@fluent-frame/shared";
 import type { AgentBatchProgress, AgentRunner } from "./agentTypes.js";
 import { clearCachedResult, readCacheEntry, writeCachedResult } from "./cache.js";
+import type { RemoteCacheProvider } from "./remoteCache.js";
 import { assertAgentOutput } from "./resultValidation.js";
 
-export type ProcessVideoMode = "cache" | "generated" | "partialFallback" | "sourceFallback";
+export type ProcessVideoMode = "cache" | "remoteCache" | "generated" | "partialFallback" | "sourceFallback";
 
 export type ProcessVideoEvent =
   | { type: "partialResult"; result: LearningSubtitleResult; completedBatches: number; totalBatches: number }
@@ -11,6 +12,7 @@ export type ProcessVideoEvent =
 
 export type ProcessVideoDeps = {
   cacheDir: string;
+  remoteCache?: RemoteCacheProvider;
   downloadCaptions: (videoId: string, captionLanguage: string) => Promise<string>;
   runAgent: AgentRunner;
   onEvent?: (event: ProcessVideoEvent) => Promise<void> | void;
@@ -83,6 +85,12 @@ export async function processVideo(
     throw cached.error;
   }
 
+  const remoteResult = await deps.remoteCache?.readResult(videoId, captionLanguage).catch(() => undefined);
+  if (remoteResult) {
+    await writeCachedResult(deps.cacheDir, remoteResult);
+    return { result: remoteResult, cacheHit: true, mode: "remoteCache" };
+  }
+
   const captionText = await deps.downloadCaptions(videoId, captionLanguage);
   const fallbackSubtitles = sourceSubtitles(captionText);
   if (fallbackSubtitles.length === 0) {
@@ -123,6 +131,7 @@ export async function processVideo(
       };
   if (bestAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
+    await deps.remoteCache?.writeResult(result).catch(() => undefined);
   }
   const mode: ProcessVideoMode = successfulAgentOutput ? "generated" : bestAgentOutput ? "partialFallback" : "sourceFallback";
   if (agentFailure && mode !== "generated") {

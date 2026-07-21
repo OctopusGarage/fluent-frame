@@ -16,6 +16,21 @@ function ok(label, passed, detail = "") {
   return passed;
 }
 
+function remoteCacheSummary(config) {
+  const remoteCache = config.remoteCache;
+  if (!remoteCache || remoteCache.enabled !== true || remoteCache.provider !== "github") {
+    return { enabled: false };
+  }
+  const tokenEnv = typeof remoteCache.tokenEnv === "string" ? remoteCache.tokenEnv : undefined;
+  return {
+    enabled: true,
+    detail: `${remoteCache.owner}/${remoteCache.repo}@${remoteCache.branch ?? "main"}:${remoteCache.basePath ?? "data/youtube"}`,
+    writeEnabled: remoteCache.writeEnabled === true,
+    tokenEnv,
+    tokenConfigured: tokenEnv ? Boolean(process.env[tokenEnv]) : false,
+  };
+}
+
 async function readManifest() {
   try {
     return JSON.parse(await readFile(nativeHostManifestPath, "utf8"));
@@ -50,6 +65,22 @@ async function main() {
   const claudeOk = ok("claude", Boolean(claudePath), claudePath);
   const agentOk = selectedAgent === "claude" ? claudeOk : codexOk;
   ok("selected agent", agentOk, selectedAgent);
+
+  logStep("Remote cache");
+  const remoteCache = remoteCacheSummary(config);
+  if (!remoteCache.enabled) {
+    ok("GitHub remote cache", true, "disabled");
+  } else {
+    ok("GitHub remote cache", true, remoteCache.detail);
+    ok("GitHub remote writes", remoteCache.writeEnabled, remoteCache.writeEnabled ? "enabled" : "disabled");
+    if (remoteCache.tokenEnv) {
+      ok("GitHub token env", remoteCache.tokenConfigured, remoteCache.tokenConfigured
+        ? `${remoteCache.tokenEnv} is set`
+        : `${remoteCache.tokenEnv} is not set in this shell`);
+    } else {
+      ok("GitHub token env", false, "not configured; public read-only cache only");
+    }
+  }
 
   const healthy = extensionBuilt && configExists && manifestExists && manifestLinked && ytDlpOk && agentOk;
   logStep(healthy ? "FluentFrame is ready" : "Action needed");

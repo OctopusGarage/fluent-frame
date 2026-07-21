@@ -25,6 +25,8 @@ Common fields:
 - `timestamp`: ISO timestamp.
 - `level`: `debug`, `info`, `warn`, or `error`.
 - `component`: native-host area, such as `hostRouter`, `queue`, `queueRunner`, `queueProcessor`, `processor`, or `videoMetadata`.
+- Remote cache hits currently appear under `processor` or `queue`, with
+  `details.mode` set to `remoteCache` when a GitHub cache hit is returned.
 - `event`: stable event name.
 - `requestId`: native messaging request ID when available.
 - `jobId`: queue job ID when available.

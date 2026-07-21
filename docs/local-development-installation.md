@@ -97,8 +97,8 @@ skipped the ID prompt during setup or reloaded the extension and got a new ID.
 pnpm run doctor
 ```
 
-Check the local build, native-host manifest, linked Chrome origin, `yt-dlp`, and
-selected local agent.
+Check the local build, native-host manifest, linked Chrome origin, `yt-dlp`,
+selected local agent, and optional GitHub remote cache config.
 
 `pnpm doctor` is a pnpm built-in command, so use `pnpm run doctor` or the alias
 `pnpm ff:doctor` for the FluentFrame check.
@@ -134,6 +134,62 @@ Environment variables still override this file:
 ```bash
 FF_AGENT=claude FF_CLAUDE_PATH=/absolute/path/to/claude pnpm setup
 ```
+
+## Optional GitHub Remote Cache
+
+FluentFrame can read generated learning subtitle data from a user-owned GitHub
+repository before running Codex or Claude. This is useful when you reinstall,
+use multiple machines, or enqueue videos that were already generated elsewhere.
+
+Add a generic remote cache block to `~/.fluent-frame/config.json`:
+
+```json
+{
+  "agent": "codex",
+  "remoteCache": {
+    "enabled": true,
+    "provider": "github",
+    "owner": "your-github-name",
+    "repo": "your-fluent-frame-cache",
+    "branch": "main",
+    "basePath": "data/youtube",
+    "writeEnabled": false,
+    "tokenEnv": "FLUENT_FRAME_GITHUB_TOKEN"
+  }
+}
+```
+
+Remote cache lookup order:
+
+```text
+local cache -> GitHub cache -> local Codex/Claude generation
+```
+
+Remote paths use:
+
+```text
+data/youtube/<videoId>/<captionLanguage>/<workflowVersion>/result.json
+```
+
+Public read-only repositories do not require a token. Private repositories and
+uploads need a GitHub token in the configured environment variable:
+
+```bash
+export FLUENT_FRAME_GITHUB_TOKEN=github_pat_xxx
+pnpm run doctor
+```
+
+When Chrome launches the native host from the macOS GUI, it may not inherit
+variables from your terminal shell. For private repositories or uploads, expose
+the token to GUI-launched Chrome before opening Chrome:
+
+```bash
+launchctl setenv FLUENT_FRAME_GITHUB_TOKEN github_pat_xxx
+```
+
+`writeEnabled` is intentionally `false` by default. Turn it on only when you
+want FluentFrame to upload generated cache artifacts to your configured repo.
+The token value is never written to `~/.fluent-frame/config.json`.
 
 ## Chrome Popup Status
 

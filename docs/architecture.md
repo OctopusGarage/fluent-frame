@@ -47,6 +47,7 @@ Generate subtitles click
   -> background service worker creates processVideo request
   -> native host validates request
   -> cache lookup by video/language/workflow
+  -> optional GitHub remote cache lookup
   -> yt-dlp downloads English captions as SRT
   -> configured Codex or Claude CLI returns subtitle + phrase JSON
   -> result validator enforces schema and references
@@ -58,6 +59,30 @@ The original SRT remains the timing authority. Agent output may correct English,
 add Chinese text, and create learning events, but it must not redefine playback
 timing.
 
+## GitHub Remote Cache
+
+GitHub remote cache is optional and user-configured. The native host treats it as
+a secondary cache provider, not as the primary database:
+
+```text
+local result.json
+  -> GitHub result.json
+  -> local generation
+  -> local result.json
+  -> optional GitHub upload
+```
+
+Remote cache artifacts use the same identity as the local cache:
+
+```text
+<basePath>/<videoId>/<language>/<workflowVersion>/result.json
+```
+
+The repository owner, repo, branch, base path, write flag, and token environment
+variable are read from `~/.fluent-frame/config.json`. Tokens are read from the
+environment and are not stored in config. Remote read/write failures are treated
+as cache misses or non-fatal upload failures so local generation still works.
+
 ## Pre-Generation Queue
 
 FluentFrame can enqueue videos before the user watches them:
@@ -66,6 +91,7 @@ FluentFrame can enqueue videos before the user watches them:
 Add current video / paste YouTube URL
   -> background service worker creates enqueueVideo request
   -> native host writes ~/.fluent-frame/queue/jobs.json
+  -> local/GitHub cache hit marks the job ready immediately
   -> queue runner starts automatically
   -> one queued job is processed at a time
   -> processVideo writes the normal cache result

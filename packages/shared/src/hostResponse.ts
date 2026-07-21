@@ -1,5 +1,5 @@
 import { isValidLearningSubtitleResult } from "./resultValidation.js";
-import type { HostResponse, QueueJob, QueueState } from "./protocol.js";
+import type { HostHealth, HostResponse, QueueJob, QueueState } from "./protocol.js";
 import { parseCaptionLanguage, parsePersonalNotes, parseQueueJobId, parseYoutubeVideoId } from "./protocol.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -75,6 +75,39 @@ function parseQueueState(value: unknown): QueueState {
   };
 }
 
+function parseRemoteCacheHealth(value: unknown): HostHealth["remoteCache"] {
+  if (value === undefined) {
+    return { enabled: false };
+  }
+  if (!isObject(value) || typeof value.enabled !== "boolean") {
+    throw new Error("Invalid native host response");
+  }
+  if (!value.enabled) {
+    return { enabled: false };
+  }
+  if (
+    value.provider !== "github" ||
+    typeof value.owner !== "string" ||
+    typeof value.repo !== "string" ||
+    typeof value.branch !== "string" ||
+    typeof value.basePath !== "string" ||
+    typeof value.writeEnabled !== "boolean" ||
+    typeof value.tokenConfigured !== "boolean"
+  ) {
+    throw new Error("Invalid native host response");
+  }
+  return {
+    enabled: true,
+    provider: "github",
+    owner: value.owner,
+    repo: value.repo,
+    branch: value.branch,
+    basePath: value.basePath,
+    writeEnabled: value.writeEnabled,
+    tokenConfigured: value.tokenConfigured,
+  };
+}
+
 export function parseHostResponse(expectedId: string, response: unknown): HostResponse {
   if (!isObject(response) || response.id !== expectedId || typeof response.ok !== "boolean") {
     throw new Error("Invalid native host response");
@@ -99,7 +132,13 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
     typeof response.health.ytDlpPath === "string" &&
     isObject(response.health.checks)
   ) {
-    return response as HostResponse;
+    return {
+      ...response,
+      health: {
+        ...response.health,
+        remoteCache: parseRemoteCacheHealth(response.health.remoteCache),
+      },
+    } as HostResponse;
   }
   if (
     response.type === "progress" &&

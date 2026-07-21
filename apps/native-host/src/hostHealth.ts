@@ -35,6 +35,18 @@ export async function buildHealth(config: HostConfig): Promise<HostHealth> {
     agent: config.agent,
     cacheDir: config.cacheDir,
     notesFile: config.notesFile,
+    remoteCache: config.remoteCache.enabled
+      ? {
+          enabled: true,
+          provider: config.remoteCache.provider,
+          owner: config.remoteCache.owner,
+          repo: config.remoteCache.repo,
+          branch: config.remoteCache.branch,
+          basePath: config.remoteCache.basePath,
+          writeEnabled: config.remoteCache.writeEnabled,
+          tokenConfigured: Boolean(config.remoteCache.token),
+        }
+      : { enabled: false },
     ytDlpPath: config.ytDlpPath,
     codexPath: config.codexPath,
     claudePath: config.claudePath,

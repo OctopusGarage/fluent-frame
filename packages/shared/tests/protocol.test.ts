@@ -186,6 +186,43 @@ describe("parseQueueJobId", () => {
 });
 
 describe("parseHostResponse", () => {
+  it("accepts health responses with GitHub remote cache status", () => {
+    expect(parseHostResponse("health1", {
+      id: "health1",
+      ok: true,
+      type: "health",
+      health: {
+        version: "0.1.0",
+        workflowVersion: WORKFLOW_VERSION,
+        agent: "codex",
+        cacheDir: "/tmp/cache",
+        notesFile: "/tmp/notes.json",
+        remoteCache: {
+          enabled: true,
+          provider: "github",
+          owner: "octo",
+          repo: "cache",
+          branch: "main",
+          basePath: "data/youtube",
+          writeEnabled: false,
+          tokenConfigured: false,
+        },
+        ytDlpPath: "yt-dlp",
+        checks: { ytDlp: true, codex: true, claude: false },
+      },
+    })).toMatchObject({
+      type: "health",
+      health: {
+        remoteCache: {
+          enabled: true,
+          provider: "github",
+          owner: "octo",
+          repo: "cache",
+        },
+      },
+    });
+  });
+
   it("accepts queue responses", () => {
     const job = {
       id: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,

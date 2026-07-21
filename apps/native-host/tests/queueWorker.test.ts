@@ -13,12 +13,14 @@ function config(): HostConfig {
     ytDlpPath: "yt-dlp",
     codexPath: "codex",
     claudePath: "claude",
+    remoteCache: { enabled: false },
   };
 }
 
 describe("queue worker startup", () => {
   it("treats cached, generated, and partial fallback output as queue-ready", () => {
     expect(isQueueReadyOutput("cache")).toBe(true);
+    expect(isQueueReadyOutput("remoteCache")).toBe(true);
     expect(isQueueReadyOutput("generated")).toBe(true);
     expect(isQueueReadyOutput("partialFallback")).toBe(true);
     expect(isQueueReadyOutput("sourceFallback")).toBe(false);
@@ -48,5 +50,46 @@ describe("queue worker startup", () => {
       }),
     );
     expect(unref).toHaveBeenCalledOnce();
+  });
+
+  it("passes GitHub remote cache settings to detached worker processes", async () => {
+    const unref = vi.fn();
+    const spawnDetached = vi.fn(() => ({ unref }));
+
+    await startDetachedQueueWorker({
+      ...config(),
+      remoteCache: {
+        enabled: true,
+        provider: "github",
+        owner: "octo",
+        repo: "cache",
+        branch: "main",
+        basePath: "data/youtube",
+        writeEnabled: true,
+        tokenEnv: "FF_GITHUB_TOKEN",
+        token: "secret-token",
+      },
+    }, {
+      entrypointPath: "/repo/apps/native-host/dist/index.js",
+      spawnDetached,
+      env: { PATH: "/usr/bin" },
+    });
+
+    expect(spawnDetached).toHaveBeenCalledWith(
+      process.execPath,
+      ["/repo/apps/native-host/dist/index.js"],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          FF_REMOTE_CACHE_PROVIDER: "github",
+          FF_REMOTE_CACHE_OWNER: "octo",
+          FF_REMOTE_CACHE_REPO: "cache",
+          FF_REMOTE_CACHE_BRANCH: "main",
+          FF_REMOTE_CACHE_BASE_PATH: "data/youtube",
+          FF_REMOTE_CACHE_WRITE_ENABLED: "true",
+          FF_REMOTE_CACHE_TOKEN_ENV: "FF_GITHUB_TOKEN",
+          FF_GITHUB_TOKEN: "secret-token",
+        }),
+      }),
+    );
   });
 });

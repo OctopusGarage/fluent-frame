@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HostRequest, HostResponse, QueueJob, QueueState } from "@fluent-frame/shared";
-import { readCachedResult } from "./cache.js";
+import { readCachedResult, writeCachedResult } from "./cache.js";
 import { createConfiguredRunner } from "./agentRunner.js";
 import { downloadCaptions } from "./captionDownloader.js";
 import type { HostConfig } from "./config.js";
@@ -11,6 +11,7 @@ import { createQueueRunner, type QueueRunner } from "./queueRunner.js";
 import { createQueueStore, type QueueStore } from "./queueStore.js";
 import { fetchVideoTitle } from "./videoMetadata.js";
 import { createLogger, type Logger } from "./logger.js";
+import { createRemoteCacheProvider } from "./remoteCache.js";
 
 type EnqueueVideoRequest = Extract<HostRequest, { type: "enqueueVideo" }>;
 type GetQueueRequest = Extract<HostRequest, { type: "getQueue" }>;
@@ -52,7 +53,7 @@ function queueErrorResponse(id: string, error: unknown): HostResponse {
 }
 
 export function isQueueReadyOutput(mode: ProcessVideoOutput["mode"]): boolean {
-  return mode === "generated" || mode === "cache" || mode === "partialFallback";
+  return mode === "generated" || mode === "cache" || mode === "remoteCache" || mode === "partialFallback";
 }
 
 async function processQueuedJob(config: HostConfig, logger: Logger, store: QueueStore, job: QueueJob): Promise<void> {
@@ -69,8 +70,10 @@ async function processQueuedJob(config: HostConfig, logger: Logger, store: Queue
     codexPath: config.codexPath,
     claudePath: config.claudePath,
   });
+  const remoteCache = createRemoteCacheProvider(config.remoteCache);
   const output = await processVideo(job.videoId, job.captionLanguage, {
     cacheDir: config.cacheDir,
+    ...(remoteCache ? { remoteCache } : {}),
     downloadCaptions: (videoId, captionLanguage) => downloadCaptions(videoId, captionLanguage, config.ytDlpPath),
     runAgent,
     async onPartialResult(_result, progress) {
@@ -153,6 +156,18 @@ export async function startDetachedQueueWorker(config: HostConfig, deps: Detache
       FF_YTDLP_PATH: config.ytDlpPath,
       FF_CODEX_PATH: config.codexPath,
       FF_CLAUDE_PATH: config.claudePath,
+      ...(config.remoteCache.enabled
+        ? {
+            FF_REMOTE_CACHE_PROVIDER: config.remoteCache.provider,
+            FF_REMOTE_CACHE_OWNER: config.remoteCache.owner,
+            FF_REMOTE_CACHE_REPO: config.remoteCache.repo,
+            FF_REMOTE_CACHE_BRANCH: config.remoteCache.branch,
+            FF_REMOTE_CACHE_BASE_PATH: config.remoteCache.basePath,
+            FF_REMOTE_CACHE_WRITE_ENABLED: String(config.remoteCache.writeEnabled),
+            ...(config.remoteCache.tokenEnv ? { FF_REMOTE_CACHE_TOKEN_ENV: config.remoteCache.tokenEnv } : {}),
+            ...(config.remoteCache.tokenEnv && config.remoteCache.token ? { [config.remoteCache.tokenEnv]: config.remoteCache.token } : {}),
+          }
+        : {}),
     },
   });
   child.unref();
@@ -172,7 +187,18 @@ function startQueue(config: HostConfig): void {
 
 async function cacheReady(config: HostConfig, request: EnqueueVideoRequest): Promise<boolean> {
   try {
-    return Boolean(await readCachedResult(config.cacheDir, request.videoId, request.captionLanguage));
+    if (await readCachedResult(config.cacheDir, request.videoId, request.captionLanguage)) {
+      return true;
+    }
+    const remoteResult = await createRemoteCacheProvider(config.remoteCache)?.readResult(
+      request.videoId,
+      request.captionLanguage,
+    );
+    if (!remoteResult) {
+      return false;
+    }
+    await writeCachedResult(config.cacheDir, remoteResult);
+    return true;
   } catch {
     return false;
   }

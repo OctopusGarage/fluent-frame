@@ -31,12 +31,15 @@ export async function handleProcessVideoRequest(
     const { createConfiguredRunner } = await import("./agentRunner.js");
     const { downloadCaptions } = await import("./captionDownloader.js");
     const { processVideo } = await import("./processor.js");
+    const { createRemoteCacheProvider } = await import("./remoteCache.js");
     const runAgent = await createConfiguredRunner(config.agent, {
       codexPath: config.codexPath,
       claudePath: config.claudePath,
     });
+    const remoteCache = createRemoteCacheProvider(config.remoteCache);
     const output = await processVideo(request.videoId, request.captionLanguage, {
       cacheDir: config.cacheDir,
+      ...(remoteCache ? { remoteCache } : {}),
       downloadCaptions: (videoId, captionLanguage) => downloadCaptions(videoId, captionLanguage, config.ytDlpPath),
       runAgent,
       ...(request.stream
@@ -97,7 +100,7 @@ export async function handleProcessVideoRequest(
       });
     }
     await logger.log({
-      level: output.mode === "generated" || output.mode === "cache" ? "info" : "warn",
+      level: output.mode === "generated" || output.mode === "cache" || output.mode === "remoteCache" ? "info" : "warn",
       component: "processor",
       event: "generation.completed",
       message: "Completed learning subtitle generation request",

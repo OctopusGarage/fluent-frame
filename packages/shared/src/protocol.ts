@@ -89,6 +89,16 @@ export type HostHealth = {
   agent: AgentName;
   cacheDir: string;
   notesFile: string;
+  remoteCache: {
+    enabled: boolean;
+    provider?: "github";
+    owner?: string;
+    repo?: string;
+    branch?: string;
+    basePath?: string;
+    writeEnabled?: boolean;
+    tokenConfigured?: boolean;
+  };
   ytDlpPath: string;
   codexPath?: string;
   claudePath?: string;
