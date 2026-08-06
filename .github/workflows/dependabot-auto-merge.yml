@@ -1,0 +1,60 @@
+name: Dependabot auto-merge
+
+# Dependabot updates land on dev after the repository's required checks pass.
+# Main remains the manually promoted release branch.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' ||
+      github.event.pull_request.user.login == 'app/dependabot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retarget Dependabot PR to dev
+        if: github.event.pull_request.base.ref != 'dev'
+        run: gh pr edit "$PR_URL" --base dev
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          skip-commit-verification: "true"
+          skip-verification: "true"
+
+      - name: Refresh eligible branch from dev
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr update-branch "$PR_URL" --rebase
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for all checks to pass
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr checks "$PR_URL" --watch --fail-fast
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Squash-merge into dev
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --squash --delete-branch "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

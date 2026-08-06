@@ -70,3 +70,9 @@ docs:
 chore:
 refactor:
 ```
+
+## Pull Request Automation
+
+Dependency updates and bot-managed PRs target `dev`; `main` is promoted
+manually. See [docs/pr-automation.md](docs/pr-automation.md) for the automatic
+merge gates and the tmux-claude-bot review policy.
