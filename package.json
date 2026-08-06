@@ -38,6 +38,11 @@
     "link:chrome": "node scripts/link-chrome.mjs",
     "uninstall:local": "node scripts/uninstall-local.mjs"
   },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.23"
+    }
+  },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^24.0.0",
