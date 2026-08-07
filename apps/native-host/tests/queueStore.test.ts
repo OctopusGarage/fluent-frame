@@ -92,6 +92,20 @@ describe("QueueStore", () => {
     });
   });
 
+  it("allows only one queue store instance to claim a queued job", async () => {
+    await withTempDir(async (dir) => {
+      const queueFile = join(dir, "jobs.json");
+      const firstStore = createQueueStore(queueFile);
+      const secondStore = createQueueStore(queueFile);
+      const { job } = await firstStore.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+
+      const claims = await Promise.all([firstStore.claimNext(), secondStore.claimNext()]);
+
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      expect((await firstStore.getQueue()).runningJobId).toBe(job.id);
+    });
+  });
+
   it("does not recover fresh running jobs before the stale timeout", async () => {
     await withTempDir(async (dir) => {
       let currentTime = "2026-07-21T00:00:00.000Z";
