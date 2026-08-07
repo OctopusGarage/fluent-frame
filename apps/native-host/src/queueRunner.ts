@@ -25,6 +25,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Queue job failed";
 }
 
+function isMissingJobError(error: unknown): boolean {
+  return error instanceof Error && error.message === "Queue job not found";
+}
+
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 
 export function createQueueRunner({
@@ -110,8 +114,58 @@ export function createQueueRunner({
         });
         const heartbeat = startHeartbeat(job);
         try {
-          await processJob(job);
-          await store.markDone(job.id);
+          let processingFailed = false;
+          let processingError: unknown;
+          try {
+            await processJob(job);
+          } catch (error) {
+            processingFailed = true;
+            processingError = error;
+          }
+          if (processingFailed) {
+            try {
+              await store.markFailed(job.id, errorMessage(processingError));
+            } catch (error) {
+              if (!isMissingJobError(error)) {
+                throw error;
+              }
+              await logger?.log({
+                level: "warn",
+                component: "queueRunner",
+                event: "job.removedDuringProcessing",
+                message: "Queued learning subtitle job was removed before failure could be persisted",
+                jobId: job.id,
+                videoId: job.videoId,
+              });
+              continue;
+            }
+            await logger?.log({
+              level: "error",
+              component: "queueRunner",
+              event: "job.failed",
+              message: "Queued learning subtitle job failed",
+              jobId: job.id,
+              videoId: job.videoId,
+              details: { error: processingError },
+            });
+            continue;
+          }
+          try {
+            await store.markDone(job.id);
+          } catch (error) {
+            if (!isMissingJobError(error)) {
+              throw error;
+            }
+            await logger?.log({
+              level: "warn",
+              component: "queueRunner",
+              event: "job.removedDuringProcessing",
+              message: "Queued learning subtitle job was removed before completion could be persisted",
+              jobId: job.id,
+              videoId: job.videoId,
+            });
+            continue;
+          }
           await logger?.log({
             level: "info",
             component: "queueRunner",
@@ -119,17 +173,6 @@ export function createQueueRunner({
             message: "Completed queued learning subtitle job",
             jobId: job.id,
             videoId: job.videoId,
-          });
-        } catch (error) {
-          await store.markFailed(job.id, errorMessage(error));
-          await logger?.log({
-            level: "error",
-            component: "queueRunner",
-            event: "job.failed",
-            message: "Queued learning subtitle job failed",
-            jobId: job.id,
-            videoId: job.videoId,
-            details: { error },
           });
         } finally {
           if (heartbeat) {

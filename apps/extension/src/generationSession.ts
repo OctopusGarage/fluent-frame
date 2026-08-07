@@ -74,7 +74,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
 
   function isStale(requestSequence: number, videoId: string): boolean {
     const currentVideoId = deps.currentVideoId();
-    return requestSequence !== latestRequestSequence || Boolean(currentVideoId && currentVideoId !== videoId);
+    return requestSequence !== latestRequestSequence || currentVideoId !== videoId;
   }
 
   function finishFailure(videoId: string, startedMs: number, message: string): void {

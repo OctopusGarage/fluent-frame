@@ -130,4 +130,50 @@ describe("QueueRunner", () => {
     expect(touchRunning).toHaveBeenCalled();
     expect(queued.status).toBe("done");
   });
+
+  it("continues after a running job is removed before completion", async () => {
+    const first = { ...job("dQw4w9WgXcQ"), status: "queued" as const };
+    const second = { ...job("o3RPPjzciqo"), status: "queued" as const };
+    let running = false;
+    let claimCount = 0;
+    const processed: string[] = [];
+    const store: QueueWorkStore = {
+      async recoverStaleRunningJobs() {},
+      async claimNext() {
+        if (running) {
+          return undefined;
+        }
+        const next = claimCount === 0 ? first : claimCount === 1 ? second : undefined;
+        if (!next) {
+          return undefined;
+        }
+        claimCount += 1;
+        running = true;
+        next.status = "running";
+        return next;
+      },
+      async touchRunning() {
+        return undefined;
+      },
+      async markDone() {
+        running = false;
+        throw new Error("Queue job not found");
+      },
+      async markFailed() {
+        running = false;
+        throw new Error("Queue job not found");
+      },
+    };
+    const runner = createQueueRunner({
+      store,
+      heartbeatIntervalMs: 0,
+      processJob: async (nextJob) => {
+        processed.push(nextJob.id);
+      },
+    });
+
+    await runner.start();
+
+    expect(processed).toEqual([first.id, second.id]);
+  });
 });

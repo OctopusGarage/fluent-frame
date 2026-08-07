@@ -68,4 +68,30 @@ describe("VideoLearningSession", () => {
 
     expect(ui.setResult).toHaveBeenCalledWith(result, expect.stringContaining("Learning subtitles ready in"));
   });
+
+  it("ignores a result after navigation away from a video", () => {
+    const ui = createUi();
+    let currentVideoId: string | undefined = "dQw4w9WgXcQ";
+    let handlers: { onResult(result: LearningSubtitleResult): void } | undefined;
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: {
+        start(_videoId, nextHandlers) {
+          handlers = nextHandlers;
+          return { disconnect: vi.fn() };
+        },
+      },
+      ui,
+      currentVideoId: () => currentVideoId,
+      reconcilePlayerUi: vi.fn(),
+    });
+
+    session.start("dQw4w9WgXcQ");
+    currentVideoId = undefined;
+    session.handleNavigation(undefined);
+    handlers?.onResult(result);
+
+    expect(ui.setResult).not.toHaveBeenCalledWith(result, expect.any(String));
+  });
 });
