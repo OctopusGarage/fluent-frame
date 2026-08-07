@@ -72,8 +72,12 @@ const requestHandlers = {
       return cacheErrorResponse(request.id, error);
     }
   },
-  async processVideo(request, { config, emit }) {
-    return handleProcessVideoRequest(request, { config, ...(emit ? { emit } : {}) });
+  async processVideo(request, { config, logger, emit }) {
+    return handleProcessVideoRequest(request, {
+      config,
+      logger,
+      ...(emit ? { emit } : {}),
+    });
   },
   async enqueueVideo(request, { config }) {
     return createQueueRequestHandler(config).enqueueVideo(request);
