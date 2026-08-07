@@ -1,16 +1,15 @@
 import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
-import { createLogger } from "./logger.js";
+import type { Logger } from "./logger.js";
 import { runVideoProcessingPipeline } from "./videoProcessingPipeline.js";
 
 type ProcessVideoRequest = Extract<HostRequest, { type: "processVideo" }>;
 
 export async function handleProcessVideoRequest(
   request: ProcessVideoRequest,
-  context: { config: HostConfig; emit?: (response: HostResponse) => void },
+  context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
 ): Promise<HostResponse> {
-  const { config, emit } = context;
-  const logger = createLogger(config.logFile);
+  const { config, logger, emit } = context;
   try {
     await logger.log({
       level: "info",
