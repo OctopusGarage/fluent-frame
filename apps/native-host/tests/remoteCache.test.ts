@@ -93,6 +93,26 @@ describe("createGithubRemoteCache", () => {
     await expect(provider.readResult("dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
   });
 
+  it("returns undefined when GitHub cache metadata does not match the request", async () => {
+    const provider = createGithubRemoteCache({
+      config: {
+        enabled: true,
+        provider: "github",
+        owner: "octo",
+        repo: "cache",
+        branch: "main",
+        basePath: "data/youtube",
+        writeEnabled: false,
+      },
+      fetch: async () => jsonResponse({
+        content: Buffer.from(JSON.stringify({ ...result, videoId: "aaaaaaaaaaa" }), "utf8").toString("base64"),
+        encoding: "base64",
+      }),
+    });
+
+    await expect(provider.readResult("dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+  });
+
   it("uploads result JSON with an existing file sha when writes are enabled", async () => {
     const requests: Request[] = [];
     const provider = createGithubRemoteCache({
