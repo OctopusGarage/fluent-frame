@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { assertLearningSubtitleResult, WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
+import { hasCacheIdentity, matchesCacheIdentity } from "./cacheResult.js";
 
 export const INVALID_CACHE_MESSAGE = "Invalid cached subtitle result";
 
@@ -13,10 +14,6 @@ export type CacheEntry =
 
 function resultPath(cacheDir: string, videoId: string, captionLanguage: string): string {
   return join(cacheDir, videoId, captionLanguage, WORKFLOW_VERSION, "result.json");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function assertCachedResult(value: unknown): asserts value is LearningSubtitleResult {
@@ -45,19 +42,10 @@ export async function readCacheEntry(cacheDir: string, videoId: string, captionL
   try {
     const content = await readFile(resultPath(cacheDir, videoId, captionLanguage), "utf8");
     const parsed = JSON.parse(content) as unknown;
-    if (
-      !isRecord(parsed) ||
-      typeof parsed.videoId !== "string" ||
-      typeof parsed.sourceLanguage !== "string" ||
-      typeof parsed.workflowVersion !== "string"
-    ) {
+    if (!hasCacheIdentity(parsed)) {
       throw new Error(INVALID_CACHE_MESSAGE);
     }
-    if (
-      parsed.videoId !== videoId ||
-      parsed.sourceLanguage !== captionLanguage ||
-      parsed.workflowVersion !== WORKFLOW_VERSION
-    ) {
+    if (!matchesCacheIdentity(parsed, videoId, captionLanguage, WORKFLOW_VERSION)) {
       return { status: "stale" };
     }
     assertCachedResult(parsed);

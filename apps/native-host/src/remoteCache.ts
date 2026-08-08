@@ -1,4 +1,5 @@
 import { assertLearningSubtitleResult, WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
+import { matchesCacheIdentity } from "./cacheResult.js";
 import type { RemoteCacheConfig } from "./config.js";
 
 export type RemoteCacheProvider = {
@@ -84,11 +85,7 @@ export function createGithubRemoteCache({ config, fetch: fetchImpl = fetch }: Gi
       }
       const parsed = decodeContent(content);
       assertRemoteResult(parsed);
-      if (
-        parsed.videoId !== videoId ||
-        parsed.sourceLanguage !== captionLanguage ||
-        parsed.workflowVersion !== WORKFLOW_VERSION
-      ) {
+      if (!matchesCacheIdentity(parsed, videoId, captionLanguage, WORKFLOW_VERSION)) {
         return undefined;
       }
       return parsed;
