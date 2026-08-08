@@ -18,7 +18,7 @@ function config(): HostConfig {
 }
 
 describe("queue worker startup", () => {
-  it("treats cached, generated, and partial fallback output as queue-ready", () => {
+  it("treats only cacheable output as queue-ready", () => {
     expect(isQueueReadyOutput("cache")).toBe(true);
     expect(isQueueReadyOutput("remoteCache")).toBe(true);
     expect(isQueueReadyOutput("generated")).toBe(true);

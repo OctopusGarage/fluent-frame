@@ -65,18 +65,16 @@ async function processQueuedJob(config: HostConfig, logger: Logger, store: Queue
     },
   });
   if (!isQueueReadyOutput(output.mode)) {
-    throw new Error(output.fallbackReason ?? "Learning subtitle generation failed");
-  }
-  if (output.mode === "partialFallback") {
     await logger.log({
       level: "warn",
       component: "queueProcessor",
-      event: "generation.partialReady",
-      message: "Queued learning subtitle generation kept the last successful partial result",
+      event: "generation.fallback",
+      message: "Queued learning subtitle generation produced a non-cacheable fallback",
       jobId: job.id,
       videoId: job.videoId,
-      details: { fallbackReason: output.fallbackReason },
+      details: { mode: output.mode, fallbackReason: output.fallbackReason },
     });
+    throw new Error(output.fallbackReason ?? "Learning subtitle generation failed");
   }
   await logger.log({
     level: "info",
