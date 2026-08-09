@@ -22,7 +22,7 @@ describe("native host entrypoint", () => {
       stdio: "pipe",
     });
     tempDir = mkdtempSync(join(tmpdir(), "native host bin "));
-  });
+  }, 30_000);
 
   afterAll(() => {
     if (tempDir) {

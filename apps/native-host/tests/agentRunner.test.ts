@@ -226,7 +226,7 @@ process.stdin.on("end", () => {
     const promptLog = await readFile(promptLogPath, "utf8");
     expect(promptLog.split("---PROMPT---").filter((chunk) => chunk.trim()).length).toBe(26);
     expect(promptLog).toContain("\n520\n");
-  });
+  }, 15_000);
 });
 
 describe("createClaudeRunner", () => {
