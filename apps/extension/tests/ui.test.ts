@@ -103,9 +103,37 @@ const sparsePhraseResult: LearningSubtitleResult = {
   ],
 };
 
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key) {
+      return values.get(key) ?? null;
+    },
+    key(index) {
+      return [...values.keys()][index] ?? null;
+    },
+    removeItem(key) {
+      values.delete(key);
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    },
+  };
+}
+
 describe("createCoachUi", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: createMemoryStorage(),
+    });
     window.localStorage.clear();
     Element.prototype.scrollIntoView = vi.fn();
   });
