@@ -3,17 +3,43 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-function run(command: string, args: string[], cwd: string): Promise<void> {
+const CAPTION_DOWNLOAD_TIMEOUT_MS = 120_000;
+
+type CaptionDownloadOptions = {
+  timeoutMs?: number;
+};
+
+function run(command: string, args: string[], cwd: string, options: CaptionDownloadOptions = {}): Promise<void> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutMs = options.timeoutMs ?? CAPTION_DOWNLOAD_TIMEOUT_MS;
     const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "";
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error("Timed out while downloading captions"));
+    }, timeoutMs);
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
     });
     child.on("error", (error: NodeJS.ErrnoException) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
       reject(error.code === "ENOENT" ? new Error(`yt-dlp not found at ${command}`) : error);
     });
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
       if (code === 0) {
         resolve();
       } else {
@@ -50,7 +76,12 @@ async function findSrtPath(dir: string, captionLanguage: string): Promise<string
   throw new Error("yt-dlp produced multiple SRT caption files and none matched the requested language");
 }
 
-export async function downloadCaptions(videoId: string, captionLanguage: string, ytDlpPath: string): Promise<string> {
+export async function downloadCaptions(
+  videoId: string,
+  captionLanguage: string,
+  ytDlpPath: string,
+  options: CaptionDownloadOptions = {},
+): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "ff-captions-"));
   try {
     await run(
@@ -68,6 +99,7 @@ export async function downloadCaptions(videoId: string, captionLanguage: string,
         `https://www.youtube.com/watch?v=${videoId}`,
       ],
       dir,
+      options,
     );
     const srtPath = await findSrtPath(dir, captionLanguage);
     return await readFile(srtPath, "utf8");
