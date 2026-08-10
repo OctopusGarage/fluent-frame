@@ -1,13 +1,12 @@
-import type { HostRequest, HostResponse, QueueJob } from "@fluent-frame/shared";
+import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
-import type { ProcessVideoOutput } from "./processor.js";
 import { createQueueCoordinator } from "./queueCoordinator.js";
 import { createQueueRunner, type QueueRunner } from "./queueRunner.js";
-import { createQueueStore, type QueueStore } from "./queueStore.js";
-import { createLogger, type Logger } from "./logger.js";
+import { createQueueStore } from "./queueStore.js";
+import { createLogger } from "./logger.js";
+import { createQueuedJobProcessor } from "./queueProcessor.js";
 import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
 import { startDetachedQueueWorker, startQueue, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
-import { runVideoProcessingPipeline } from "./videoProcessingPipeline.js";
 
 type EnqueueVideoRequest = Extract<HostRequest, { type: "enqueueVideo" }>;
 type GetQueueRequest = Extract<HostRequest, { type: "getQueue" }>;
@@ -15,6 +14,7 @@ type RemoveQueueJobRequest = Extract<HostRequest, { type: "removeQueueJob" }>;
 type RetryQueueJobRequest = Extract<HostRequest, { type: "retryQueueJob" }>;
 
 export { startDetachedQueueWorker, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
+export { isQueueReadyOutput } from "./queueProcessor.js";
 
 const runners = new Map<string, QueueRunner>();
 
@@ -28,65 +28,6 @@ function queueErrorResponse(id: string, error: unknown): HostResponse {
   };
 }
 
-export function isQueueReadyOutput(mode: ProcessVideoOutput["mode"]): boolean {
-  return mode === "generated" || mode === "cache" || mode === "remoteCache";
-}
-
-async function processQueuedJob(config: HostConfig, logger: Logger, store: QueueStore, job: QueueJob): Promise<void> {
-  await logger.log({
-    level: "info",
-    component: "queueProcessor",
-    event: "generation.started",
-    message: "Starting queued learning subtitle generation",
-    jobId: job.id,
-    videoId: job.videoId,
-    details: { captionLanguage: job.captionLanguage, title: job.title },
-  });
-  const output = await runVideoProcessingPipeline(config, {
-    videoId: job.videoId,
-    captionLanguage: job.captionLanguage,
-    async onPartialResult(_result, progress) {
-      await store.markProgress(job.id, {
-        completedBatches: progress.completedBatches,
-        totalBatches: progress.totalBatches,
-      });
-      await logger.log({
-        level: "info",
-        component: "queueProcessor",
-        event: "generation.batchCompleted",
-        message: `Completed queued learning subtitle batch ${progress.completedBatches} of ${progress.totalBatches}`,
-        jobId: job.id,
-        videoId: job.videoId,
-        details: {
-          completedBatches: progress.completedBatches,
-          totalBatches: progress.totalBatches,
-        },
-      });
-    },
-  });
-  if (!isQueueReadyOutput(output.mode)) {
-    await logger.log({
-      level: "warn",
-      component: "queueProcessor",
-      event: "generation.fallback",
-      message: "Queued learning subtitle generation produced a non-cacheable fallback",
-      jobId: job.id,
-      videoId: job.videoId,
-      details: { mode: output.mode, fallbackReason: output.fallbackReason },
-    });
-    throw new Error(output.fallbackReason ?? "Learning subtitle generation failed");
-  }
-  await logger.log({
-    level: "info",
-    component: "queueProcessor",
-    event: "generation.completed",
-    message: "Queued learning subtitle generation completed",
-    jobId: job.id,
-    videoId: job.videoId,
-    details: { mode: output.mode },
-  });
-}
-
 function queueRunner(config: HostConfig): QueueRunner {
   const existing = runners.get(config.queueFile);
   if (existing) {
@@ -97,7 +38,7 @@ function queueRunner(config: HostConfig): QueueRunner {
   const runner = createQueueRunner({
     store,
     logger,
-    processJob: (job) => processQueuedJob(config, logger, store, job),
+    processJob: createQueuedJobProcessor(config, logger, store),
   });
   runners.set(config.queueFile, runner);
   return runner;
