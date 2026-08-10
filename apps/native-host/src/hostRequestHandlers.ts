@@ -2,7 +2,7 @@ import { WORKFLOW_VERSION, type HostRequest, type HostResponse } from "@fluent-f
 import { createCacheRequestHandler } from "./cacheRequestHandler.js";
 import type { HostConfig } from "./config.js";
 import { buildHealth } from "./hostHealth.js";
-import { readPersonalNotes, writePersonalNotes } from "./notes.js";
+import { createNotesRequestHandler } from "./notesRequestHandler.js";
 import { handleProcessVideoRequest } from "./processVideoRequestHandler.js";
 import { createQueueRequestHandler } from "./queueRequestHandler.js";
 import type { Logger } from "./logger.js";
@@ -11,16 +11,6 @@ type HostRequestHandler<T extends HostRequest = HostRequest> = (
   request: T,
   context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
 ) => Promise<HostResponse>;
-
-function notesErrorResponse(id: string, error: unknown): HostResponse {
-  return {
-    id,
-    ok: false,
-    type: "error",
-    code: "NOTES_ERROR",
-    message: error instanceof Error ? error.message : "Notes operation failed",
-  };
-}
 
 const requestHandlers = {
   async getStatus(request) {
@@ -33,19 +23,10 @@ const requestHandlers = {
     return createCacheRequestHandler(config).getCachedVideo(request);
   },
   async getPersonalNotes(request, { config }) {
-    try {
-      return { id: request.id, ok: true, type: "personalNotes", notes: await readPersonalNotes(config.notesFile) };
-    } catch (error) {
-      return notesErrorResponse(request.id, error);
-    }
+    return createNotesRequestHandler(config).getPersonalNotes(request);
   },
   async savePersonalNotes(request, { config }) {
-    try {
-      await writePersonalNotes(config.notesFile, request.notes);
-      return { id: request.id, ok: true, type: "personalNotesSaved" };
-    } catch (error) {
-      return notesErrorResponse(request.id, error);
-    }
+    return createNotesRequestHandler(config).savePersonalNotes(request);
   },
   async clearVideoCache(request, { config }) {
     return createCacheRequestHandler(config).clearVideoCache(request);
