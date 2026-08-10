@@ -5,6 +5,7 @@ import { createQueueRunner, type QueueRunner } from "./queueRunner.js";
 import { createQueueStore } from "./queueStore.js";
 import { createLogger } from "./logger.js";
 import { createQueuedJobProcessor } from "./queueProcessor.js";
+import { createQueueEventLogger } from "./queueEventLogger.js";
 import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
 import { startDetachedQueueWorker, startQueue, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
 
@@ -57,27 +58,7 @@ export function createQueueRequestHandler(config: HostConfig) {
       cacheReady: (input) => cacheReady(config, input),
       resolveTitle: (videoId, title) => resolveVideoTitle(config, videoId, title),
       startQueue: () => startQueue(config),
-      async log({ event, message, job, queue, jobId }) {
-        await logger.log({
-          level: "info",
-          component: "queue",
-          event,
-          message,
-          requestId,
-          ...(job ? { jobId: job.id, videoId: job.videoId } : {}),
-          ...(jobId ? { jobId } : {}),
-          details: {
-            ...(job ? { status: job.status, title: job.title, url: job.url } : {}),
-            ...(queue
-              ? {
-                  jobs: queue.jobs.length,
-                  runningJobId: queue.runningJobId,
-                  queued: queue.jobs.filter((candidate) => candidate.status === "queued").length,
-                }
-              : {}),
-          },
-        });
-      },
+      log: createQueueEventLogger(logger, requestId),
     });
   }
   return {
