@@ -5,6 +5,7 @@ import {
   buildNativeHostWrapper,
   LEGACY_NATIVE_HOST_NAME,
   PLACEHOLDER_ALLOWED_ORIGIN,
+  resolveManagedHostPath,
   resolveAllowedOrigins,
   resolveExtensionId,
 } from "../src/scripts/install-native-host.js";
@@ -49,6 +50,12 @@ describe("native host installer", () => {
       type: "stdio",
       allowed_origins: ["chrome-extension://abcdefghijklmnopabcdefghijklmnop/"],
     });
+  });
+
+  it("uses a stable managed native host path outside transient worktrees", () => {
+    expect(resolveManagedHostPath("/repo/apps/native-host/dist/scripts/install-native-host.js", "/Users/example")).toBe(
+      "/Users/example/.fluent-frame/host/native-host/index.js",
+    );
   });
 
   it("keeps the legacy native host name available for installer cleanup", () => {

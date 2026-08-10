@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,6 +26,10 @@ export type NativeHostWrapperConfig = {
   codexPath?: string;
   claudePath?: string;
 };
+
+export function resolveManagedHostPath(scriptPath: string, homeDir = homedir()): string {
+  return join(homeDir, ".fluent-frame", "host", "native-host", "index.js");
+}
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -137,6 +141,19 @@ async function removeLegacyNativeHostManifest(nativeMessagingDir: string): Promi
   await rm(legacyManifestPath, { force: true });
 }
 
+async function installManagedHostRuntime(sourceHostDir: string, managedHostDir: string): Promise<void> {
+  const repoRoot = resolve(sourceHostDir, "..", "..", "..");
+  const sharedPackageDir = join(repoRoot, "packages", "shared");
+  const managedSharedDir = join(managedHostDir, "node_modules", "@fluent-frame", "shared");
+
+  await rm(managedHostDir, { recursive: true, force: true });
+  await mkdir(managedHostDir, { recursive: true });
+  await cp(sourceHostDir, managedHostDir, { recursive: true });
+  await mkdir(managedSharedDir, { recursive: true });
+  await cp(join(sharedPackageDir, "dist"), join(managedSharedDir, "dist"), { recursive: true });
+  await cp(join(sharedPackageDir, "package.json"), join(managedSharedDir, "package.json"));
+}
+
 export async function installNativeHost(extensionId = resolveExtensionId(process.argv.slice(2), process.env)): Promise<void> {
   const chromeNativeMessagingDir = join(
     homedir(),
@@ -147,7 +164,9 @@ export async function installNativeHost(extensionId = resolveExtensionId(process
     "NativeMessagingHosts",
   );
   const manifestPath = join(chromeNativeMessagingDir, `${NATIVE_HOST_NAME}.json`);
-  const hostPath = resolve(dirname(fileURLToPath(import.meta.url)), "..", "index.js");
+  const sourceHostDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const hostPath = resolveManagedHostPath(fileURLToPath(import.meta.url));
+  const managedHostDir = dirname(hostPath);
   const wrapperDir = join(homedir(), ".fluent-frame", "bin");
   const wrapperPath = join(wrapperDir, "native-host");
   const existingManifest = await readExistingManifest(manifestPath);
@@ -172,6 +191,7 @@ export async function installNativeHost(extensionId = resolveExtensionId(process
   }
 
   await mkdir(wrapperDir, { recursive: true });
+  await installManagedHostRuntime(sourceHostDir, managedHostDir);
   await writeFile(wrapperPath, buildNativeHostWrapper(wrapperConfig), "utf8");
   await chmod(wrapperPath, 0o755);
   await mkdir(dirname(manifestPath), { recursive: true });

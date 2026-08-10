@@ -246,6 +246,23 @@ The manifest is written to:
 ~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.octopusgarage.fluent_frame.json
 ```
 
+The manifest points to a small wrapper at:
+
+```text
+~/.fluent-frame/bin/native-host
+```
+
+That wrapper runs the managed native-host runtime copied during install/update:
+
+```text
+~/.fluent-frame/host/native-host/index.js
+```
+
+Chrome should not point directly at a repository checkout or temporary worktree.
+`pnpm link:chrome <extension-id>` refreshes the wrapper and managed runtime.
+`pnpm run doctor` verifies the full chain: manifest, allowed Chrome origin,
+wrapper, Node executable, and managed native-host target.
+
 The manifest must contain the exact unpacked extension ID:
 
 ```json
