@@ -58,4 +58,17 @@ writeFileSync(join(process.cwd(), "dQw4w9WgXcQ.en-US.srt"), "regional captions")
       `yt-dlp not found at ${ytDlpPath}`,
     );
   });
+
+  it("times out when yt-dlp stalls while downloading captions", async () => {
+    const ytDlpPath = await writeExecutable(
+      "stalled-yt-dlp.mjs",
+      `#!/usr/bin/env node
+setInterval(() => {}, 1000);
+`,
+    );
+
+    await expect(downloadCaptions("dQw4w9WgXcQ", "en", ytDlpPath, { timeoutMs: 50 })).rejects.toThrow(
+      "Timed out while downloading captions",
+    );
+  });
 });

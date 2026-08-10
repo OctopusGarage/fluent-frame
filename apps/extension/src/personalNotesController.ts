@@ -36,6 +36,26 @@ function defaultNotesStore(): PersonalNotesStore {
   };
 }
 
+async function loadLatestNotes(store: PersonalNotesStore, fallback: PersonalNote[]): Promise<PersonalNote[]> {
+  try {
+    const notes = await store.load();
+    return Array.isArray(notes) ? notes : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function upsertNote(notes: PersonalNote[], nextNote: PersonalNote): { notes: PersonalNote[]; existed: boolean } {
+  const existingIndex = notes.findIndex((note) => note.id === nextNote.id);
+  if (existingIndex >= 0) {
+    return {
+      existed: true,
+      notes: notes.map((note, index) => (index === existingIndex ? { ...nextNote, savedAt: note.savedAt } : note)),
+    };
+  }
+  return { existed: false, notes: [nextNote, ...notes] };
+}
+
 export function createPersonalNotesController(deps: PersonalNotesControllerDeps): PersonalNotesController {
   const store = deps.store ?? defaultNotesStore();
   let personalNotes: PersonalNote[] = [];
@@ -76,15 +96,17 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         ...(phrase?.usageNotes ? { usageNotes: phrase.usageNotes } : {}),
         savedAt: new Date().toISOString(),
       };
-      const existingIndex = personalNotes.findIndex((note) => note.id === nextNote.id);
-      personalNotes = existingIndex >= 0
-        ? personalNotes.map((note, index) => (index === existingIndex ? { ...nextNote, savedAt: note.savedAt } : note))
-        : [nextNote, ...personalNotes];
+      const optimistic = upsertNote(personalNotes, nextNote);
+      personalNotes = optimistic.notes;
       render();
-      deps.setStatus(existingIndex >= 0 ? "Note already saved" : "Adding note...");
+      deps.setStatus(optimistic.existed ? "Note already saved" : "Adding note...");
       try {
+        const latest = await loadLatestNotes(store, personalNotes);
+        const persisted = upsertNote(latest, nextNote);
+        personalNotes = persisted.notes;
+        render();
         await store.save(personalNotes);
-        deps.setStatus(existingIndex >= 0 ? "Note already saved" : "Added to personal notes");
+        deps.setStatus(persisted.existed ? "Note already saved" : "Added to personal notes");
       } catch (error) {
         const message = error instanceof Error ? error.message : "Local helper failed";
         deps.setError(`Note not saved: ${message}`);
@@ -92,6 +114,8 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
     },
     async remove(id) {
       personalNotes = personalNotes.filter((note) => note.id !== id);
+      render();
+      personalNotes = (await loadLatestNotes(store, personalNotes)).filter((note) => note.id !== id);
       render();
       await store.save(personalNotes);
       deps.setStatus("Removed from personal notes");
