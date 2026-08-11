@@ -1,5 +1,5 @@
 import { isValidLearningSubtitleResult } from "./resultValidation.js";
-import type { HostHealth, HostResponse, QueueJob, QueueState } from "./protocol.js";
+import type { HostHealth, HostProgress, HostResponse, QueueJob, QueueState } from "./protocol.js";
 import { parseCaptionLanguage, parsePersonalNotes, parseQueueJobId, parseYoutubeVideoId } from "./protocol.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -108,6 +108,28 @@ function parseRemoteCacheHealth(value: unknown): HostHealth["remoteCache"] {
   };
 }
 
+function parseProgress(value: unknown): HostProgress {
+  if (
+    !isObject(value) ||
+    (value.stage !== "cache" &&
+      value.stage !== "download" &&
+      value.stage !== "agent" &&
+      value.stage !== "codex" &&
+      value.stage !== "done") ||
+    typeof value.message !== "string"
+  ) {
+    throw new Error("Invalid native host response");
+  }
+  const completedBatches = parseOptionalNonNegativeNumber(value.completedBatches, "Invalid native host response");
+  const totalBatches = parseOptionalNonNegativeNumber(value.totalBatches, "Invalid native host response");
+  return {
+    stage: value.stage,
+    message: value.message,
+    ...(completedBatches !== undefined ? { completedBatches } : {}),
+    ...(totalBatches !== undefined ? { totalBatches } : {}),
+  };
+}
+
 export function parseHostResponse(expectedId: string, response: unknown): HostResponse {
   if (!isObject(response) || response.id !== expectedId || typeof response.ok !== "boolean") {
     throw new Error("Invalid native host response");
@@ -142,15 +164,9 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
   }
   if (
     response.type === "progress" &&
-    isObject(response.progress) &&
-    (response.progress.stage === "cache" ||
-      response.progress.stage === "download" ||
-      response.progress.stage === "agent" ||
-      response.progress.stage === "codex" ||
-      response.progress.stage === "done") &&
-    typeof response.progress.message === "string"
+    isObject(response.progress)
   ) {
-    return response as HostResponse;
+    return { id: expectedId, ok: true, type: "progress", progress: parseProgress(response.progress) };
   }
   if (
     response.type === "partialResult" &&

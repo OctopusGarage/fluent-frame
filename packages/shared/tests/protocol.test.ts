@@ -259,6 +259,32 @@ describe("parseHostResponse", () => {
     });
   });
 
+  it("rejects progress responses with invalid batch counters", () => {
+    expect(() => parseHostResponse("progress1", {
+      id: "progress1",
+      ok: true,
+      type: "progress",
+      progress: {
+        stage: "agent",
+        message: "Generated batch -1 of 2",
+        completedBatches: -1,
+        totalBatches: 2,
+      },
+    })).toThrow("Invalid native host response");
+
+    expect(() => parseHostResponse("progress2", {
+      id: "progress2",
+      ok: true,
+      type: "progress",
+      progress: {
+        stage: "agent",
+        message: "Generated batch 1 of 1.5",
+        completedBatches: 1,
+        totalBatches: 1.5,
+      },
+    })).toThrow("Invalid native host response");
+  });
+
   it("rejects learning subtitle results with invalid nested cue data", () => {
     expect(() => parseHostResponse("response1", {
       id: "response1",
