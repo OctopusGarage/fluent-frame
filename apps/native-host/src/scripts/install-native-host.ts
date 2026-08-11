@@ -27,6 +27,12 @@ export type NativeHostWrapperConfig = {
   claudePath?: string;
 };
 
+export type ManagedHostRuntimeInstallEntry = {
+  from: string;
+  to: string;
+  recursive: boolean;
+};
+
 export function resolveManagedHostPath(scriptPath: string, homeDir = homedir()): string {
   return join(homeDir, ".fluent-frame", "host", "native-host", "index.js");
 }
@@ -141,17 +147,26 @@ async function removeLegacyNativeHostManifest(nativeMessagingDir: string): Promi
   await rm(legacyManifestPath, { force: true });
 }
 
-async function installManagedHostRuntime(sourceHostDir: string, managedHostDir: string): Promise<void> {
+export function buildManagedHostRuntimeInstallPlan(sourceHostDir: string, managedHostDir: string): ManagedHostRuntimeInstallEntry[] {
   const repoRoot = resolve(sourceHostDir, "..", "..", "..");
   const sharedPackageDir = join(repoRoot, "packages", "shared");
+  return [
+    { from: sourceHostDir, to: managedHostDir, recursive: true },
+    { from: join(repoRoot, "apps", "native-host", "prompts"), to: join(managedHostDir, "prompts"), recursive: true },
+    { from: join(sharedPackageDir, "dist"), to: join(managedHostDir, "node_modules", "@fluent-frame", "shared", "dist"), recursive: true },
+    { from: join(sharedPackageDir, "package.json"), to: join(managedHostDir, "node_modules", "@fluent-frame", "shared", "package.json"), recursive: false },
+  ];
+}
+
+async function installManagedHostRuntime(sourceHostDir: string, managedHostDir: string): Promise<void> {
   const managedSharedDir = join(managedHostDir, "node_modules", "@fluent-frame", "shared");
 
   await rm(managedHostDir, { recursive: true, force: true });
   await mkdir(managedHostDir, { recursive: true });
-  await cp(sourceHostDir, managedHostDir, { recursive: true });
   await mkdir(managedSharedDir, { recursive: true });
-  await cp(join(sharedPackageDir, "dist"), join(managedSharedDir, "dist"), { recursive: true });
-  await cp(join(sharedPackageDir, "package.json"), join(managedSharedDir, "package.json"));
+  for (const entry of buildManagedHostRuntimeInstallPlan(sourceHostDir, managedHostDir)) {
+    await cp(entry.from, entry.to, { recursive: entry.recursive });
+  }
 }
 
 export async function installNativeHost(extensionId = resolveExtensionId(process.argv.slice(2), process.env)): Promise<void> {
