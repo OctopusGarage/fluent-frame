@@ -30,6 +30,14 @@ function parseOptionalNonNegativeNumber(value: unknown, message: string): number
   return value;
 }
 
+function parseRequiredNonNegativeNumber(value: unknown, message: string): number {
+  const parsed = parseOptionalNonNegativeNumber(value, message);
+  if (parsed === undefined) {
+    throw new Error(message);
+  }
+  return parsed;
+}
+
 function parseQueueJob(value: unknown): QueueJob {
   if (!isObject(value)) {
     throw new Error("Invalid native host response");
@@ -170,11 +178,16 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
   }
   if (
     response.type === "partialResult" &&
-    isValidLearningSubtitleResult(response.result) &&
-    typeof response.completedBatches === "number" &&
-    typeof response.totalBatches === "number"
+    isValidLearningSubtitleResult(response.result)
   ) {
-    return response as HostResponse;
+    return {
+      id: expectedId,
+      ok: true,
+      type: "partialResult",
+      result: response.result,
+      completedBatches: parseRequiredNonNegativeNumber(response.completedBatches, "Invalid native host response"),
+      totalBatches: parseRequiredNonNegativeNumber(response.totalBatches, "Invalid native host response"),
+    };
   }
   if (response.type === "result" && isValidLearningSubtitleResult(response.result)) {
     return response as HostResponse;
