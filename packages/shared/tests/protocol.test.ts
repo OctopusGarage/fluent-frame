@@ -9,6 +9,22 @@ import {
   WORKFLOW_VERSION,
 } from "../src/protocol.js";
 
+const validLearningSubtitleResult = {
+  videoId: "dQw4w9WgXcQ",
+  sourceLanguage: "en",
+  workflowVersion: WORKFLOW_VERSION,
+  generatedAt: "2026-07-21T00:00:00.000Z",
+  subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Nice pass.", chinese: "传得漂亮。", phraseIds: ["p1"] }],
+  phrases: [{
+    id: "p1",
+    cueId: 1,
+    phrase: "nice pass",
+    meaningZh: "传得漂亮",
+    explanationEn: "A good pass.",
+    difficulty: "useful",
+  }],
+};
+
 describe("parseYoutubeVideoId", () => {
   it("accepts normal YouTube IDs", () => {
     expect(parseYoutubeVideoId("dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
@@ -257,6 +273,52 @@ describe("parseHostResponse", () => {
       type: "queue",
       queue: { paused: false, runningJobId: job.id, jobs: [job] },
     });
+  });
+
+  it("rejects progress responses with invalid batch counters", () => {
+    expect(() => parseHostResponse("progress1", {
+      id: "progress1",
+      ok: true,
+      type: "progress",
+      progress: {
+        stage: "agent",
+        message: "Generated batch -1 of 2",
+        completedBatches: -1,
+        totalBatches: 2,
+      },
+    })).toThrow("Invalid native host response");
+
+    expect(() => parseHostResponse("progress2", {
+      id: "progress2",
+      ok: true,
+      type: "progress",
+      progress: {
+        stage: "agent",
+        message: "Generated batch 1 of 1.5",
+        completedBatches: 1,
+        totalBatches: 1.5,
+      },
+    })).toThrow("Invalid native host response");
+  });
+
+  it("rejects partial results with invalid batch counters", () => {
+    expect(() => parseHostResponse("partial1", {
+      id: "partial1",
+      ok: true,
+      type: "partialResult",
+      result: validLearningSubtitleResult,
+      completedBatches: -1,
+      totalBatches: 2,
+    })).toThrow("Invalid native host response");
+
+    expect(() => parseHostResponse("partial2", {
+      id: "partial2",
+      ok: true,
+      type: "partialResult",
+      result: validLearningSubtitleResult,
+      completedBatches: 1,
+      totalBatches: 1.5,
+    })).toThrow("Invalid native host response");
   });
 
   it("rejects learning subtitle results with invalid nested cue data", () => {

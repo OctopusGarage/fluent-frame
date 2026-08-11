@@ -5,6 +5,7 @@ import {
   type HostRequest,
 } from "@fluent-frame/shared";
 import { createRequestId } from "./requestId.js";
+import { extractYoutubeVideoIdFromUrl as parseYoutubeUrlVideoId } from "./youtubeUrl.js";
 
 export function createProcessVideoRequest(videoId: unknown, stream = false): HostRequest {
   return {
@@ -17,24 +18,7 @@ export function createProcessVideoRequest(videoId: unknown, stream = false): Hos
 }
 
 export function extractYoutubeVideoIdFromUrl(url: string | undefined): string | undefined {
-  if (!url) {
-    return undefined;
-  }
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, "");
-    if (host === "youtube.com" || host === "m.youtube.com") {
-      const id = parsed.searchParams.get("v");
-      return id ? parseYoutubeVideoId(id) : undefined;
-    }
-    if (host === "youtu.be") {
-      const id = parsed.pathname.split("/").filter(Boolean)[0];
-      return id ? parseYoutubeVideoId(id) : undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  return parseYoutubeUrlVideoId(url);
 }
 
 export function createGetPersonalNotesRequest(): HostRequest {
