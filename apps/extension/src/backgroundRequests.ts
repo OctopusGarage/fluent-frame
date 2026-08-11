@@ -5,7 +5,7 @@ import {
   type HostRequest,
 } from "@fluent-frame/shared";
 import { createRequestId } from "./requestId.js";
-import { extractYoutubeVideoIdFromUrl as parseYoutubeUrlVideoId } from "./video.js";
+import { extractYoutubeVideoIdFromUrl as parseYoutubeUrlVideoId } from "./youtubeUrl.js";
 
 export function createProcessVideoRequest(videoId: unknown, stream = false): HostRequest {
   return {

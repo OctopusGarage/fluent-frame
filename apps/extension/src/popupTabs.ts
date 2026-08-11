@@ -1,4 +1,4 @@
-import { extractYoutubeVideoIdFromUrl } from "./video.js";
+import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
 
 export type PopupTabsDeps = {
   tabs: typeof chrome.tabs;
