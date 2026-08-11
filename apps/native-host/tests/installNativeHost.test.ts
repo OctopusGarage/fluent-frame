@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NATIVE_HOST_NAME } from "@fluent-frame/shared";
 import {
+  buildManagedHostRuntimeInstallPlan,
   buildNativeHostManifest,
   buildNativeHostWrapper,
   LEGACY_NATIVE_HOST_NAME,
@@ -56,6 +57,14 @@ describe("native host installer", () => {
     expect(resolveManagedHostPath("/repo/apps/native-host/dist/scripts/install-native-host.js", "/Users/example")).toBe(
       "/Users/example/.fluent-frame/host/native-host/index.js",
     );
+  });
+
+  it("copies prompt assets into the managed native host runtime", () => {
+    expect(buildManagedHostRuntimeInstallPlan("/repo/apps/native-host/dist", "/Users/example/.fluent-frame/host/native-host")).toContainEqual({
+      from: "/repo/apps/native-host/prompts",
+      to: "/Users/example/.fluent-frame/host/native-host/prompts",
+      recursive: true,
+    });
   });
 
   it("keeps the legacy native host name available for installer cleanup", () => {
