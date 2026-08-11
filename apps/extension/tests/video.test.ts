@@ -6,8 +6,14 @@ describe("extractVideoIdFromUrl", () => {
     expect(extractVideoIdFromUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
   });
 
+  it("extracts mobile and short-link video IDs", () => {
+    expect(extractVideoIdFromUrl("https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=42s")).toBe("dQw4w9WgXcQ");
+    expect(extractVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?si=abc")).toBe("dQw4w9WgXcQ");
+  });
+
   it("returns undefined when missing", () => {
     expect(extractVideoIdFromUrl("https://www.youtube.com/")).toBeUndefined();
+    expect(extractVideoIdFromUrl("not a url")).toBeUndefined();
   });
 });
 

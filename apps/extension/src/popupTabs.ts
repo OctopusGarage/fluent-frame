@@ -1,23 +1,12 @@
+import { extractYoutubeVideoIdFromUrl } from "./video.js";
+
 export type PopupTabsDeps = {
   tabs: typeof chrome.tabs;
   setStatus(message: string): void;
 };
 
 export function parseYoutubeVideoIdFromUrl(value: string): string | undefined {
-  try {
-    const url = new URL(value);
-    if (url.hostname === "youtu.be") {
-      const id = url.pathname.split("/").filter(Boolean)[0];
-      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : undefined;
-    }
-    if (url.hostname.endsWith("youtube.com")) {
-      const id = url.searchParams.get("v");
-      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  return extractYoutubeVideoIdFromUrl(value);
 }
 
 export function createPopupTabs(deps: PopupTabsDeps) {
