@@ -8,7 +8,12 @@ export function extractVideoIdFromUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);
     const host = parsed.hostname.replace(/^www\./, "");
-    const id = host === "youtu.be" ? parsed.pathname.split("/").filter(Boolean)[0] : parsed.searchParams.get("v");
+    const pathParts = parsed.pathname.split("/").filter(Boolean);
+    const id = host === "youtu.be"
+      ? pathParts[0]
+      : pathParts[0] === "shorts"
+        ? pathParts[1]
+        : parsed.searchParams.get("v");
     return validVideoId(id);
   } catch {
     return undefined;

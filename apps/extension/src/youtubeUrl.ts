@@ -12,6 +12,10 @@ export function extractYoutubeVideoIdFromUrl(url: string | undefined): string | 
     const parsed = new URL(url);
     const host = parsed.hostname.replace(/^www\./, "");
     if (host === "youtube.com" || host === "m.youtube.com") {
+      const pathParts = parsed.pathname.split("/").filter(Boolean);
+      if (pathParts[0] === "shorts") {
+        return validVideoId(pathParts[1]);
+      }
       return validVideoId(parsed.searchParams.get("v"));
     }
     if (host === "youtu.be") {

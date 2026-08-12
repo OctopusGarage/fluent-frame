@@ -188,13 +188,13 @@ export function registerQueueContextMenus(chromeApi: ExtensionChromeApi): void {
         title: "Add video to FluentFrame queue",
         contexts: ["link"],
         documentUrlPatterns: ["https://www.youtube.com/*"],
-        targetUrlPatterns: ["https://www.youtube.com/watch*", "https://youtu.be/*"],
+        targetUrlPatterns: ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*", "https://youtu.be/*"],
       });
       menus.create({
         id: ENQUEUE_PAGE_CONTEXT_MENU_ID,
         title: "Add current video to FluentFrame queue",
         contexts: ["page", "video"],
-        documentUrlPatterns: ["https://www.youtube.com/watch*"],
+        documentUrlPatterns: ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"],
       });
     });
   }

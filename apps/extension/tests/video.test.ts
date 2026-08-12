@@ -11,6 +11,11 @@ describe("extractVideoIdFromUrl", () => {
     expect(extractVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?si=abc")).toBe("dQw4w9WgXcQ");
   });
 
+  it("extracts Shorts video IDs", () => {
+    expect(extractVideoIdFromUrl("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
+    expect(extractVideoIdFromUrl("https://m.youtube.com/shorts/dQw4w9WgXcQ?feature=share")).toBe("dQw4w9WgXcQ");
+  });
+
   it("returns undefined when missing", () => {
     expect(extractVideoIdFromUrl("https://www.youtube.com/")).toBeUndefined();
     expect(extractVideoIdFromUrl("not a url")).toBeUndefined();
