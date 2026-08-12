@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { WORKFLOW_VERSION, type QueueJob, type QueueState } from "@fluent-frame/shared";
+import { parseQueueState, WORKFLOW_VERSION, type QueueJob, type QueueState } from "@fluent-frame/shared";
 
 export type QueueStore = {
   enqueue(input: {
@@ -92,11 +92,7 @@ function doneWithoutError(job: QueueJob, updatedAt: string): QueueJob {
 }
 
 function normalizeState(value: unknown): QueueState {
-  if (!value || typeof value !== "object" || !Array.isArray((value as { jobs?: unknown }).jobs)) {
-    throw new Error("Invalid queue file");
-  }
-  const jobs = (value as { jobs: QueueJob[] }).jobs;
-  return withRunningJobId(jobs);
+  return withRunningJobId(parseQueueState(value, "Invalid queue file").jobs);
 }
 
 export function createQueueStore(queueFile: string, options: QueueStoreOptions = {}): QueueStore {

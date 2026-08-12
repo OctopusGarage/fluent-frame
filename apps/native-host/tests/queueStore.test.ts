@@ -197,4 +197,33 @@ describe("QueueStore", () => {
       await expect(readFile(`${queueFile}.corrupt`, "utf8")).resolves.toBe("{");
     });
   });
+
+  it("backs up a queue file with malformed jobs before creating a fresh queue", async () => {
+    await withTempDir(async (dir) => {
+      const queueFile = join(dir, "queue", "jobs.json");
+      await mkdir(join(queueFile, ".."), { recursive: true });
+      await writeFile(
+        queueFile,
+        JSON.stringify({
+          paused: false,
+          jobs: [
+            {
+              id: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+              videoId: "dQw4w9WgXcQ",
+              captionLanguage: "en",
+              workflowVersion: WORKFLOW_VERSION,
+              status: "ready",
+              createdAt: "2026-07-21T00:00:00.000Z",
+              updatedAt: "2026-07-21T00:00:00.000Z",
+            },
+          ],
+        }),
+        "utf8",
+      );
+      const store = createQueueStore(queueFile);
+
+      await expect(store.getQueue()).resolves.toEqual({ paused: false, jobs: [] });
+      await expect(readFile(`${queueFile}.corrupt`, "utf8")).resolves.toContain('"status":"ready"');
+    });
+  });
 });
