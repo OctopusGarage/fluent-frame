@@ -332,13 +332,13 @@ describe("background helpers", () => {
       id: "fluent-frame-enqueue-link-video",
       title: "Add video to FluentFrame queue",
       contexts: ["link"],
-      targetUrlPatterns: ["https://www.youtube.com/watch*", "https://youtu.be/*"],
+      targetUrlPatterns: ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*", "https://youtu.be/*"],
     }));
     expect(contextMenuMock.contextMenus.create).toHaveBeenCalledWith(expect.objectContaining({
       id: "fluent-frame-enqueue-page-video",
       title: "Add current video to FluentFrame queue",
       contexts: ["page", "video"],
-      documentUrlPatterns: ["https://www.youtube.com/watch*"],
+      documentUrlPatterns: ["https://www.youtube.com/watch*", "https://www.youtube.com/shorts/*"],
     }));
     expect(contextMenuMock.contextMenus.onClicked.addListener).toHaveBeenCalledOnce();
     expect(chromeApi.runtime.onInstalled.addListener).toHaveBeenCalledOnce();
@@ -467,6 +467,41 @@ describe("background helpers", () => {
       videoId: "dQw4w9WgXcQ",
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s",
       title: "Current video",
+    });
+  });
+
+  it("queues a Shorts page from the context menu", async () => {
+    const { runtime } = createRuntimeMock((request: unknown) => ({
+      id: (request as { id: string }).id,
+      ok: true,
+      type: "queueJob",
+      message: "Queued",
+      job: {
+        id: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+        videoId: "dQw4w9WgXcQ",
+        captionLanguage: "en",
+        workflowVersion: WORKFLOW_VERSION,
+        status: "queued",
+        createdAt: "2026-07-21T00:00:00.000Z",
+        updatedAt: "2026-07-21T00:00:00.000Z",
+      },
+    }));
+    const contextMenuMock = createContextMenusMock();
+    registerQueueContextMenus({ runtime, contextMenus: contextMenuMock.contextMenus });
+
+    contextMenuMock.click({
+      menuItemId: "fluent-frame-enqueue-page-video",
+      pageUrl: "https://www.youtube.com/shorts/dQw4w9WgXcQ?feature=share",
+    } as chrome.contextMenus.OnClickData, { title: "Current short" } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendNativeMessage).toHaveBeenCalledOnce();
+    });
+    expect(runtime.sendNativeMessage.mock.calls[0]?.[1]).toMatchObject({
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/shorts/dQw4w9WgXcQ?feature=share",
+      title: "Current short",
     });
   });
 
