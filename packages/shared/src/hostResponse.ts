@@ -1,6 +1,7 @@
 import { isValidLearningSubtitleResult } from "./resultValidation.js";
 import type { HostHealth, HostProgress, HostResponse } from "./protocol.js";
-import { parsePersonalNotes, parseQueueJob, parseQueueState } from "./protocol.js";
+import { parsePersonalNotes } from "./protocol.js";
+import { parseQueueJob, parseQueueState } from "./queue.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
