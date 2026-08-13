@@ -103,6 +103,52 @@ describe("handleRequest", () => {
     }
   });
 
+  it("reports remote cache health without exposing the configured token", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-health-remote-"));
+    const previousEnv = { ...process.env };
+    process.env.HOME = dir;
+    process.env.FF_REMOTE_CACHE_PROVIDER = "github";
+    process.env.FF_REMOTE_CACHE_OWNER = "octo";
+    process.env.FF_REMOTE_CACHE_REPO = "fluent-frame-cache";
+    process.env.FF_REMOTE_CACHE_BRANCH = "main";
+    process.env.FF_REMOTE_CACHE_BASE_PATH = "/data/youtube/";
+    process.env.FF_REMOTE_CACHE_WRITE_ENABLED = "true";
+    process.env.FF_REMOTE_CACHE_TOKEN_ENV = "FF_TEST_GITHUB_TOKEN";
+    process.env.FF_TEST_GITHUB_TOKEN = "secret-token";
+    process.env.FF_YTDLP_PATH = join(dir, "missing-yt-dlp");
+    process.env.FF_CODEX_PATH = join(dir, "missing-codex");
+    process.env.FF_CLAUDE_PATH = join(dir, "missing-claude");
+
+    try {
+      const response = await handleRequest({ id: "health-remote-1", type: "healthCheck" });
+
+      expect(response).toMatchObject({
+        id: "health-remote-1",
+        ok: true,
+        type: "health",
+        health: {
+          remoteCache: {
+            enabled: true,
+            provider: "github",
+            owner: "octo",
+            repo: "fluent-frame-cache",
+            branch: "main",
+            basePath: "data/youtube",
+            writeEnabled: true,
+            tokenConfigured: true,
+          },
+        },
+      });
+      expect(JSON.stringify(response)).not.toContain("secret-token");
+      if (response.ok && response.type === "health") {
+        expect(response.health.remoteCache).not.toHaveProperty("token");
+      }
+    } finally {
+      process.env = previousEnv;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects invalid input", async () => {
     await expect(handleRequest({ id: "1", type: "shell" })).resolves.toEqual({
       id: "unknown",
@@ -137,6 +183,65 @@ describe("handleRequest", () => {
         delete process.env.FF_CACHE_DIR;
       } else {
         process.env.FF_CACHE_DIR = previousCacheDir;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("clears cached video results through the native host", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-cache-clear-"));
+    const previousCacheDir = process.env.FF_CACHE_DIR;
+    process.env.FF_CACHE_DIR = dir;
+    const cachedResult: LearningSubtitleResult = {
+      videoId: "dQw4w9WgXcQ",
+      sourceLanguage: "en",
+      workflowVersion: WORKFLOW_VERSION,
+      generatedAt: "2026-07-21T00:00:00.000Z",
+      subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Cached sentence.", chinese: "缓存句子。", phraseIds: ["p1"] }],
+      phrases: [{ id: "p1", cueId: 1, phrase: "cached sentence", meaningZh: "缓存句子", explanationEn: "A cached result.", difficulty: "basic" }],
+    };
+
+    try {
+      await writeCachedResult(dir, cachedResult);
+      await expect(
+        handleRequest({ id: "cache-clear-1", type: "clearVideoCache", videoId: "dQw4w9WgXcQ", captionLanguage: "en" }),
+      ).resolves.toEqual({
+        id: "cache-clear-1",
+        ok: true,
+        type: "cacheCleared",
+      });
+      await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+    } finally {
+      if (previousCacheDir === undefined) {
+        delete process.env.FF_CACHE_DIR;
+      } else {
+        process.env.FF_CACHE_DIR = previousCacheDir;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns request-scoped notes errors for corrupted notes files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-notes-invalid-"));
+    const previousNotesFile = process.env.FF_NOTES_FILE;
+    process.env.FF_NOTES_FILE = join(dir, ".fluent-frame", "notes.json");
+
+    try {
+      await mkdir(join(dir, ".fluent-frame"), { recursive: true });
+      await writeFile(process.env.FF_NOTES_FILE, "{", "utf8");
+
+      await expect(handleRequest({ id: "notes-invalid-1", type: "getPersonalNotes" })).resolves.toEqual({
+        id: "notes-invalid-1",
+        ok: false,
+        type: "error",
+        code: "NOTES_ERROR",
+        message: "Invalid personal notes file",
+      });
+    } finally {
+      if (previousNotesFile === undefined) {
+        delete process.env.FF_NOTES_FILE;
+      } else {
+        process.env.FF_NOTES_FILE = previousNotesFile;
       }
       await rm(dir, { recursive: true, force: true });
     }
@@ -236,6 +341,17 @@ console.log("Never Gonna Give You Up");
         ok: true,
         type: "queue",
         queue: { jobs: [expect.objectContaining({ status: "done", title: "Never Gonna Give You Up" })] },
+      });
+      await expect(handleRequest({
+        id: "queue-retry-1",
+        type: "retryQueueJob",
+        jobId: `dQw4w9WgXcQ:en:${WORKFLOW_VERSION}`,
+      })).resolves.toMatchObject({
+        id: "queue-retry-1",
+        ok: true,
+        type: "queueJob",
+        message: "Queued",
+        job: { status: "queued", title: "Never Gonna Give You Up" },
       });
       await expect(handleRequest({
         id: "queue3",
