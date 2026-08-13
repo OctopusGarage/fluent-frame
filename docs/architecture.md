@@ -173,10 +173,12 @@ TypeScript and tests.
 The primary no-store installation path is:
 
 ```bash
-pnpm setup
+pnpm local:install
 pnpm link:chrome <extension-id>
 pnpm run doctor
 ```
+
+`pnpm setup` remains available as an alias for `pnpm local:install`.
 
 The setup wizard writes `~/.fluent-frame/config.json`, builds the extension,
 installs the native host wrapper, and opens `chrome://extensions`. Chrome still
