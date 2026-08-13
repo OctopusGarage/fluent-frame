@@ -75,7 +75,17 @@ export function streamNativeRequest(
     sink.onMessage(createErrorResponse(request.id, "NATIVE_HOST_UNAVAILABLE", "Native host streaming is unavailable"));
     return { disconnect() {} };
   }
-  const nativePort = runtime.connectNative(NATIVE_HOST_NAME);
+  let nativePort: RuntimePort;
+  try {
+    nativePort = runtime.connectNative(NATIVE_HOST_NAME);
+  } catch (error) {
+    sink.onMessage(createErrorResponse(
+      request.id,
+      "NATIVE_HOST_UNAVAILABLE",
+      error instanceof Error ? error.message : "Native host unavailable",
+    ));
+    return { disconnect() {} };
+  }
   let terminalResponseReceived = false;
   let closedByClient = false;
   nativePort.onMessage.addListener((nativeMessage: unknown) => {

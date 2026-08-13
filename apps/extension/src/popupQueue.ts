@@ -75,7 +75,13 @@ export function createPopupQueue(deps: PopupQueueDeps) {
   }
 
   async function sendAction(message: unknown): Promise<void> {
-    const response = (await deps.runtime.sendMessage(message)) as HostResponse;
+    let response: HostResponse;
+    try {
+      response = (await deps.runtime.sendMessage(message)) as HostResponse;
+    } catch (error) {
+      deps.setStatus(error instanceof Error ? error.message : "Queue request failed.");
+      return;
+    }
     if (!response?.ok) {
       deps.setStatus(response?.message ?? "Queue request failed.");
       return;

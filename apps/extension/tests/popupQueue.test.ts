@@ -104,4 +104,22 @@ describe("createPopupQueue", () => {
     expect(setStatus).toHaveBeenCalledWith("Queue is unavailable");
     expect(sendMessage).toHaveBeenCalledOnce();
   });
+
+  it("surfaces rejected queue action messages", async () => {
+    const sendMessage = vi.fn(async () => {
+      throw new Error("Extension context invalidated");
+    });
+    const setStatus = vi.fn();
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage },
+      openTab: vi.fn(),
+      setStatus,
+    });
+
+    await popupQueue.sendAction({ type: "removeQueueJob", jobId: "missing" });
+
+    expect(setStatus).toHaveBeenCalledWith("Extension context invalidated");
+    expect(sendMessage).toHaveBeenCalledOnce();
+  });
 });
