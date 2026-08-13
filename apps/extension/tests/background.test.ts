@@ -654,6 +654,38 @@ describe("background helpers", () => {
     expect(nativePort.disconnect).toHaveBeenCalledOnce();
   });
 
+  it("reports synchronous native streaming connection failures to the content port", () => {
+    let contentConnectListener: ((port: MockPort) => void) | undefined;
+    const contentPort = createMockPort("fluent-frame-process-video");
+    const runtime = {
+      lastError: undefined,
+      sendNativeMessage: vi.fn(),
+      connectNative: vi.fn(() => {
+        throw new Error("No native application found");
+      }),
+      onMessage: {
+        addListener: vi.fn(),
+      },
+      onConnect: {
+        addListener: vi.fn((callback: (port: MockPort) => void) => {
+          contentConnectListener = callback;
+        }),
+      },
+    } satisfies ExtensionRuntime;
+
+    registerBackgroundListener(runtime);
+    contentConnectListener?.(contentPort);
+    contentPort.emitMessage({ type: "processCurrentVideoStream", videoId: "dQw4w9WgXcQ" });
+
+    expect(contentPort.postMessage).toHaveBeenCalledWith({
+      id: expect.any(String),
+      ok: false,
+      type: "error",
+      code: "NATIVE_HOST_UNAVAILABLE",
+      message: "No native application found",
+    });
+  });
+
   it("forwards healthCheck messages to the native host", async () => {
     const { runtime, getListener } = createRuntimeMock((request: unknown) => ({
       id: (request as { id: string }).id,

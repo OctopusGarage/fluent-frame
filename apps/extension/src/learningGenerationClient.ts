@@ -36,6 +36,12 @@ export type LearningGenerationClient = {
   start(videoId: string, handlers: LearningGenerationHandlers): ActiveLearningGeneration;
 };
 
+function connectionErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.includes("Extension context invalidated")
+    ? "Extension was reloaded. Refresh this YouTube tab."
+    : "Local helper failed";
+}
+
 function handleResponse(videoId: string, response: HostResponse | undefined, handlers: LearningGenerationHandlers): void {
   if (!response || !response.ok) {
     handlers.onError(response?.message ?? "Local helper failed");
@@ -65,19 +71,26 @@ export function createRuntimeLearningGenerationClient(runtime: ContentScriptRunt
   return {
     start(videoId, handlers) {
       if (runtime.connect) {
-        const port = runtime.connect({ name: "fluent-frame-process-video" });
-        port.onMessage.addListener((message: unknown) => {
-          handleResponse(videoId, message as HostResponse | undefined, handlers);
-        });
-        port.onDisconnect.addListener(() => {
-          handlers.onDisconnect();
-        });
-        port.postMessage({ type: "processCurrentVideoStream", videoId });
-        return {
-          disconnect() {
-            port.disconnect();
-          },
-        };
+        try {
+          const port = runtime.connect({ name: "fluent-frame-process-video" });
+          port.onMessage.addListener((message: unknown) => {
+            handleResponse(videoId, message as HostResponse | undefined, handlers);
+          });
+          port.onDisconnect.addListener(() => {
+            handlers.onDisconnect();
+          });
+          port.postMessage({ type: "processCurrentVideoStream", videoId });
+          return {
+            disconnect() {
+              port.disconnect();
+            },
+          };
+        } catch (error) {
+          handlers.onError(connectionErrorMessage(error));
+          return {
+            disconnect() {},
+          };
+        }
       }
       try {
         runtime.sendMessage({ type: "processCurrentVideo", videoId }, (response: HostResponse | undefined) => {
@@ -89,9 +102,7 @@ export function createRuntimeLearningGenerationClient(runtime: ContentScriptRunt
           handleResponse(videoId, response, handlers);
         });
       } catch (error) {
-        handlers.onError(error instanceof Error && error.message.includes("Extension context invalidated")
-          ? "Extension was reloaded. Refresh this YouTube tab."
-          : "Local helper failed");
+        handlers.onError(connectionErrorMessage(error));
       }
       return {
         disconnect() {},
