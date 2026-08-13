@@ -7,6 +7,22 @@ import {
 import { createRequestId } from "./requestId.js";
 import { extractYoutubeVideoIdFromUrl as parseYoutubeUrlVideoId } from "./youtubeUrl.js";
 
+const NATIVE_OPTIONAL_TEXT_MAX_LENGTH = 500;
+
+function optionalNativeText(value: unknown, mode: "drop" | "truncate"): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (trimmed.length <= NATIVE_OPTIONAL_TEXT_MAX_LENGTH) {
+    return trimmed;
+  }
+  return mode === "truncate" ? trimmed.slice(0, NATIVE_OPTIONAL_TEXT_MAX_LENGTH) : undefined;
+}
+
 export function createProcessVideoRequest(videoId: unknown, stream = false): HostRequest {
   return {
     id: createRequestId(),
@@ -47,8 +63,8 @@ export function createEnqueueVideoRequest(input: {
   url?: unknown;
   title?: unknown;
 }): HostRequest {
-  const url = typeof input.url === "string" && input.url.trim() ? input.url.trim() : undefined;
-  const title = typeof input.title === "string" && input.title.trim() ? input.title.trim() : undefined;
+  const url = optionalNativeText(input.url, "drop");
+  const title = optionalNativeText(input.title, "truncate");
   return {
     id: createRequestId(),
     type: "enqueueVideo",

@@ -312,6 +312,33 @@ describe("background helpers", () => {
     });
   });
 
+  it("keeps queue optional metadata within native protocol limits", async () => {
+    const { runtime, getListener } = createRuntimeMock((request: unknown) => ({
+      id: (request as { id: string }).id,
+      ok: true,
+      type: "queue",
+      queue: { paused: false, jobs: [] },
+    }));
+    const sendResponse = vi.fn();
+    const longUrl = `https://www.youtube.com/watch?v=dQw4w9WgXcQ&ref=${"x".repeat(520)}`;
+    const longTitle = "Title ".repeat(120);
+    registerBackgroundListener(runtime);
+
+    expect(getListener()({
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      url: longUrl,
+      title: longTitle,
+    }, {}, sendResponse)).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(runtime.sendNativeMessage).toHaveBeenCalledOnce();
+    });
+    const request = runtime.sendNativeMessage.mock.calls[0]?.[1] as { url?: string; title?: string };
+    expect(request.url).toBeUndefined();
+    expect(request.title).toHaveLength(500);
+  });
+
   it("registers Chrome context menus for queueing links and current pages", () => {
     const { runtime } = createRuntimeMock(undefined);
     const contextMenuMock = createContextMenusMock();
