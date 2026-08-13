@@ -279,6 +279,25 @@ describe("bootstrapContentScript", () => {
     expect(document.getElementById("ff-status")?.textContent).toBe("Queued");
   });
 
+  it("shows a visible queue error when Chrome invalidates the extension context", () => {
+    const runtime = {
+      lastError: undefined,
+      sendMessage: vi.fn((_message: unknown, callback: (response: unknown) => void) => {
+        if ((_message as { type?: string }).type === "getPersonalNotes") {
+          callback({ id: "notes-1", ok: true, type: "personalNotes", notes: [] });
+          return;
+        }
+        throw new Error("Extension context invalidated.");
+      }),
+    } satisfies ContentScriptRuntime;
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime);
+
+    expect(() => document.getElementById("ff-enqueue")?.click()).not.toThrow();
+    expect(document.body.textContent).toContain("Extension was reloaded. Refresh this YouTube tab.");
+  });
+
   it("does not inject queue buttons into right-hand recommended videos", () => {
     document.body.insertAdjacentHTML("beforeend", `
       <div id="related">

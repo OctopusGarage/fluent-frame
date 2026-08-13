@@ -36,6 +36,14 @@ function titleForRightClickedVideo(anchor: HTMLAnchorElement): string | undefine
     ?? cleanTitle(card?.querySelector("[aria-label]")?.getAttribute("aria-label"));
 }
 
+function runtimeSendErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message.includes("Extension context invalidated")
+    ? "Extension was reloaded. Refresh this YouTube tab."
+    : error instanceof Error
+      ? error.message
+      : "Local helper failed";
+}
+
 function createNativeNotesStore(runtime: ContentScriptRuntime): PersonalNotesStore {
   return {
     load() {
@@ -100,30 +108,38 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     if (!videoId) {
       return;
     }
-    runtime.sendMessage({
-      type: "rememberContextMenuLink",
-      videoId,
-      url: anchor.href,
-      title: titleForRightClickedVideo(anchor),
-    }, () => {});
+    try {
+      runtime.sendMessage({
+        type: "rememberContextMenuLink",
+        videoId,
+        url: anchor.href,
+        title: titleForRightClickedVideo(anchor),
+      }, () => {});
+    } catch {
+      // The context menu has no immediate page UI; the native context-menu path validates the target again.
+    }
   }, true);
 
   function enqueueVideo(
     input: { videoId: string; url?: string; title?: string },
     handlers: { onSuccess?(message: string): void; onError?(message: string): void } = {},
   ): void {
-    runtime.sendMessage({ type: "enqueueVideo", videoId: input.videoId, url: input.url, title: input.title }, (response: HostResponse | undefined) => {
-      const error = runtime.lastError;
-      if (error) {
-        handlers.onError?.(error.message ?? "Local helper failed");
-        return;
-      }
-      if (!response || !response.ok) {
-        handlers.onError?.(response?.message ?? "Local helper failed");
-        return;
-      }
-      handlers.onSuccess?.(response.type === "queueJob" ? response.message : "Queued");
-    });
+    try {
+      runtime.sendMessage({ type: "enqueueVideo", videoId: input.videoId, url: input.url, title: input.title }, (response: HostResponse | undefined) => {
+        const error = runtime.lastError;
+        if (error) {
+          handlers.onError?.(error.message ?? "Local helper failed");
+          return;
+        }
+        if (!response || !response.ok) {
+          handlers.onError?.(response?.message ?? "Local helper failed");
+          return;
+        }
+        handlers.onSuccess?.(response.type === "queueJob" ? response.message : "Queued");
+      });
+    } catch (error) {
+      handlers.onError?.(runtimeSendErrorMessage(error));
+    }
   }
 
   const ui = createCoachUi(doc, {
