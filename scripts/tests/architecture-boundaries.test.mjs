@@ -13,13 +13,28 @@ const sourceRoots = [
     forbiddenSpecifiers: [/^@fluent-frame\/(?:extension|native-host)(?:\/|$)/, /^apps\//],
   },
   {
+    name: "shared tests",
+    path: resolve(repoRoot, "packages/shared/tests"),
+    forbiddenSpecifiers: [/^@fluent-frame\/(?:extension|native-host)(?:\/|$)/, /^apps\//],
+  },
+  {
     name: "extension",
     path: resolve(repoRoot, "apps/extension/src"),
     forbiddenSpecifiers: [/^@fluent-frame\/native-host(?:\/|$)/, /(?:^|\/)apps\/native-host(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
   },
   {
+    name: "extension tests",
+    path: resolve(repoRoot, "apps/extension/tests"),
+    forbiddenSpecifiers: [/^@fluent-frame\/native-host(?:\/|$)/, /(?:^|\/)apps\/native-host(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+  },
+  {
     name: "native host",
     path: resolve(repoRoot, "apps/native-host/src"),
+    forbiddenSpecifiers: [/^@fluent-frame\/extension(?:\/|$)/, /(?:^|\/)apps\/extension(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+  },
+  {
+    name: "native host tests",
+    path: resolve(repoRoot, "apps/native-host/tests"),
     forbiddenSpecifiers: [/^@fluent-frame\/extension(?:\/|$)/, /(?:^|\/)apps\/extension(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
   },
 ];
@@ -75,7 +90,7 @@ function normalizeSpecifier(specifier, fromFile) {
   return relative(repoRoot, resolve(fromFile, "..", specifier)).split(sep).join("/");
 }
 
-test("workspace packages keep documented architecture boundaries", () => {
+test("workspace package source and tests keep documented architecture boundaries", () => {
   const violations = [];
 
   for (const root of sourceRoots) {

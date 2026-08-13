@@ -3,7 +3,6 @@
 Use these steps from the FluentFrame project directory:
 
 ```bash
-cd ~/programming/OctopusGarage/fluent-frame
 pnpm local:install
 ```
 
@@ -15,7 +14,7 @@ Then in Chrome:
 4. Select this folder:
 
 ```text
-/Users/kingsonwu/programming/OctopusGarage/fluent-frame/apps/extension/dist
+apps/extension/dist
 ```
 
 5. Chrome will show a new FluentFrame extension card. Copy its extension ID.
@@ -39,7 +38,6 @@ extension button or the in-video control.
 For future updates:
 
 ```bash
-cd ~/programming/OctopusGarage/fluent-frame
 pnpm local:update
 ```
 
