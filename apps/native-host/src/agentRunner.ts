@@ -2,12 +2,11 @@ import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type AgentName } from "@fluent-frame/shared";
+import { assertAgentOutput, type AgentName } from "@fluent-frame/shared";
 import { createBatchedAgentRunner } from "./agentBatcher.js";
 import type { AgentOutput, AgentRunner, AgentRunnerOptions } from "./agentTypes.js";
 import type { LocalAgentAdapter } from "./localAgentAdapter.js";
 import { runClaude, runCodex } from "./localAgentProcess.js";
-import { assertAgentOutput } from "./resultValidation.js";
 export type { AgentOutput, AgentBatchProgress, AgentRunnerOptions, AgentRunner } from "./agentTypes.js";
 
 async function existingPromptPath(): Promise<string> {

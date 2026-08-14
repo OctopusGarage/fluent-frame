@@ -45,6 +45,11 @@ export type LearningSubtitleResult = {
   phrases: PhraseExplanation[];
 };
 
+export type AgentOutput = {
+  subtitles: SubtitleCue[];
+  phrases: PhraseExplanation[];
+};
+
 export type PersonalNote = {
   id: string;
   videoId: string;

@@ -4,7 +4,6 @@ import {
   type HostRequest,
   type HostResponse,
 } from "@fluent-frame/shared";
-import { createRequestId } from "./requestId.js";
 
 export type ExtensionError = {
   code: string;
@@ -108,5 +107,3 @@ export function streamNativeRequest(
     },
   };
 }
-
-export { createRequestId };

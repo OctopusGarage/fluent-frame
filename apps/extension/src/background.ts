@@ -12,7 +12,6 @@ import {
 } from "./backgroundRequests.js";
 import {
   createErrorResponse,
-  createRequestId,
   normalizeExtensionError,
   normalizeNativeResponse,
   sendNativeRequest,
@@ -20,6 +19,7 @@ import {
   type ExtensionError,
   type RuntimePort,
 } from "./nativeHostClient.js";
+import { createRequestId } from "./requestId.js";
 
 export type ExtensionRuntime = {
   lastError: chrome.runtime.LastError | undefined;
@@ -103,9 +103,6 @@ function registerStreamingPortListener(runtime: ExtensionRuntime): void {
     });
   });
 }
-
-export { createProcessVideoRequest } from "./backgroundRequests.js";
-export { createRequestId, normalizeExtensionError, normalizeNativeResponse };
 
 function forwardNativeRequest(
   runtime: ExtensionRuntime,

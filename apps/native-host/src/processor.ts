@@ -1,8 +1,7 @@
-import { parseSrt, WORKFLOW_VERSION, type LearningSubtitleResult, type SubtitleCue } from "@fluent-frame/shared";
+import { assertAgentOutput, parseSrt, WORKFLOW_VERSION, type LearningSubtitleResult, type SubtitleCue } from "@fluent-frame/shared";
 import type { AgentBatchProgress, AgentRunner } from "./agentTypes.js";
 import { clearCachedResult, readCacheEntry, writeCachedResult } from "./cache.js";
 import type { RemoteCacheProvider } from "./remoteCache.js";
-import { assertAgentOutput } from "./resultValidation.js";
 
 export type ProcessVideoMode = "cache" | "remoteCache" | "generated" | "partialFallback" | "sourceFallback";
 
