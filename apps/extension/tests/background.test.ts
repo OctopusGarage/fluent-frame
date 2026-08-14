@@ -1,13 +1,12 @@
 import { NATIVE_HOST_NAME, WORKFLOW_VERSION } from "@fluent-frame/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createRequestId,
-  normalizeExtensionError,
-  normalizeNativeResponse,
   registerBackgroundListener,
   registerQueueContextMenus,
   type ExtensionRuntime,
 } from "../src/background.js";
+import { createRequestId } from "../src/requestId.js";
+import { normalizeExtensionError, normalizeNativeResponse } from "../src/nativeHostClient.js";
 
 type RuntimeMessageCallback = (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean;
 type NativeResponseFactory = (request: unknown) => unknown;

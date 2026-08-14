@@ -90,6 +90,29 @@ function normalizeSpecifier(specifier, fromFile) {
   return relative(repoRoot, resolve(fromFile, "..", specifier)).split(sep).join("/");
 }
 
+function escapesForRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasReExportFrom(source, specifier) {
+  return new RegExp(`export\\s+[^;]*from\\s+["']${escapesForRegex(specifier)}["']`).test(source);
+}
+
+function findNamedExports(source, names) {
+  const exportedNames = [];
+
+  for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
+    const exportList = match[1];
+    for (const name of names) {
+      if (new RegExp(`(^|,)\\s*(?:type\\s+)?${escapesForRegex(name)}(?:\\s+as\\s+\\w+)?\\s*(,|$)`).test(exportList)) {
+        exportedNames.push(name);
+      }
+    }
+  }
+
+  return exportedNames;
+}
+
 test("workspace package source and tests keep documented architecture boundaries", () => {
   const violations = [];
 
@@ -136,9 +159,38 @@ test("workspace package manifests keep app dependencies one-way through shared",
 test("native host request handlers do not re-export worker or processor internals", () => {
   const queueRequestHandlerPath = resolve(repoRoot, "apps/native-host/src/queueRequestHandler.ts");
   const source = readFileSync(queueRequestHandlerPath, "utf8");
-  const forbiddenReExports = findImportSpecifiers(source)
-    .filter((specifier) => specifier === "./queueWorkerProcess.js" || specifier === "./queueProcessor.js")
-    .filter((specifier) => new RegExp(`export\\s+[^;]*from\\s+["']${specifier.replaceAll(".", "\\.")}["']`).test(source));
+  const forbiddenReExports = [
+    ...findImportSpecifiers(source)
+      .filter((specifier) => specifier === "./queueWorkerProcess.js" || specifier === "./queueProcessor.js")
+      .filter((specifier) => hasReExportFrom(source, specifier)),
+    ...findNamedExports(source, ["startDetachedQueueWorker", "DetachedQueueWorkerDeps", "isQueueReadyOutput"]),
+  ];
+
+  assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension runtime entrypoint does not re-export request or native-client internals", () => {
+  const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
+  const source = readFileSync(backgroundPath, "utf8");
+  const forbiddenReExports = [
+    ...findImportSpecifiers(source)
+      .filter((specifier) => specifier === "./backgroundRequests.js" || specifier === "./nativeHostClient.js")
+      .filter((specifier) => hasReExportFrom(source, specifier)),
+    ...findNamedExports(source, ["createProcessVideoRequest", "createRequestId", "normalizeExtensionError", "normalizeNativeResponse"]),
+  ];
+
+  assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension native client does not re-export request-id helpers", () => {
+  const nativeHostClientPath = resolve(repoRoot, "apps/extension/src/nativeHostClient.ts");
+  const source = readFileSync(nativeHostClientPath, "utf8");
+  const forbiddenReExports = [
+    ...findImportSpecifiers(source)
+      .filter((specifier) => specifier === "./requestId.js")
+      .filter((specifier) => hasReExportFrom(source, specifier)),
+    ...findNamedExports(source, ["createRequestId"]),
+  ];
 
   assert.deepEqual(forbiddenReExports, []);
 });
