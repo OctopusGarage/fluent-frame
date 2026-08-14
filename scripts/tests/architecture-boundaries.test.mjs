@@ -132,3 +132,13 @@ test("workspace package manifests keep app dependencies one-way through shared",
 
   assert.deepEqual(violations, []);
 });
+
+test("native host request handlers do not re-export worker or processor internals", () => {
+  const queueRequestHandlerPath = resolve(repoRoot, "apps/native-host/src/queueRequestHandler.ts");
+  const source = readFileSync(queueRequestHandlerPath, "utf8");
+  const forbiddenReExports = findImportSpecifiers(source)
+    .filter((specifier) => specifier === "./queueWorkerProcess.js" || specifier === "./queueProcessor.js")
+    .filter((specifier) => new RegExp(`export\\s+[^;]*from\\s+["']${specifier.replaceAll(".", "\\.")}["']`).test(source));
+
+  assert.deepEqual(forbiddenReExports, []);
+});

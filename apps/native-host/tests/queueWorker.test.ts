@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { HostConfig } from "../src/config.js";
-import { isQueueReadyOutput, startDetachedQueueWorker } from "../src/queueRequestHandler.js";
+import { isQueueReadyOutput } from "../src/queueProcessor.js";
+import { startDetachedQueueWorker } from "../src/queueWorkerProcess.js";
 
 function config(): HostConfig {
   return {

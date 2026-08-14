@@ -7,15 +7,12 @@ import { createLogger } from "./logger.js";
 import { createQueuedJobProcessor } from "./queueProcessor.js";
 import { createQueueEventLogger } from "./queueEventLogger.js";
 import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
-import { startDetachedQueueWorker, startQueue, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
+import { startQueue } from "./queueWorkerProcess.js";
 
 type EnqueueVideoRequest = Extract<HostRequest, { type: "enqueueVideo" }>;
 type GetQueueRequest = Extract<HostRequest, { type: "getQueue" }>;
 type RemoveQueueJobRequest = Extract<HostRequest, { type: "removeQueueJob" }>;
 type RetryQueueJobRequest = Extract<HostRequest, { type: "retryQueueJob" }>;
-
-export { startDetachedQueueWorker, type DetachedQueueWorkerDeps } from "./queueWorkerProcess.js";
-export { isQueueReadyOutput } from "./queueProcessor.js";
 
 const runners = new Map<string, QueueRunner>();
 
