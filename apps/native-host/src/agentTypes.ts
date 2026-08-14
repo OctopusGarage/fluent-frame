@@ -1,9 +1,6 @@
-import type { PhraseExplanation, SubtitleCue } from "@fluent-frame/shared";
+import type { AgentOutput } from "@fluent-frame/shared";
 
-export type AgentOutput = {
-  subtitles: SubtitleCue[];
-  phrases: PhraseExplanation[];
-};
+export type { AgentOutput };
 
 export type AgentBatchProgress = {
   output: AgentOutput;

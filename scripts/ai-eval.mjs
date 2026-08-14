@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { assertAgentOutput } from "../packages/shared/dist/index.js";
 import { parseSrt } from "../packages/shared/dist/subtitles.js";
-import { assertAgentOutput } from "../apps/native-host/dist/resultValidation.js";
 import { evaluateAgentOutputQuality } from "../apps/native-host/dist/qualityEval.js";
 
 const sampleSrt = `1

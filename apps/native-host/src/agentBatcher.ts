@@ -1,7 +1,6 @@
-import { parseSrt, type PhraseExplanation, type RawSubtitleCue, type SubtitleCue } from "@fluent-frame/shared";
+import { assertAgentOutput, parseSrt, type PhraseExplanation, type RawSubtitleCue, type SubtitleCue } from "@fluent-frame/shared";
 import type { AgentOutput, AgentRunner, AgentRunnerOptions } from "./agentTypes.js";
 import type { LocalAgentAdapter } from "./localAgentAdapter.js";
-import { assertAgentOutput } from "./resultValidation.js";
 
 const MAX_CUES_PER_AGENT_BATCH = 20;
 

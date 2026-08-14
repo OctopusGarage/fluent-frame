@@ -1,4 +1,4 @@
-import type { LearningSubtitleResult, PhraseExplanation, SubtitleCue, UsageNote } from "./protocol.js";
+import type { AgentOutput, LearningSubtitleResult, PhraseExplanation, SubtitleCue, UsageNote } from "./protocol.js";
 
 const difficulties = new Set(["basic", "useful", "advanced"]);
 
@@ -66,16 +66,39 @@ export function isValidLearningSubtitleResult(value: unknown): value is Learning
   ) {
     return false;
   }
-  const subtitleIds = new Set(value.subtitles.map((subtitle) => subtitle.id));
-  const phraseIds = new Set(value.phrases.map((phrase) => phrase.id));
+  return hasValidPhraseReferences(value.subtitles, value.phrases);
+}
+
+function hasValidPhraseReferences(subtitles: SubtitleCue[], phrases: PhraseExplanation[]): boolean {
+  const subtitleIds = new Set(subtitles.map((subtitle) => subtitle.id));
+  const phraseIds = new Set(phrases.map((phrase) => phrase.id));
   return (
-    value.phrases.every((phrase) => subtitleIds.has(phrase.cueId)) &&
-    value.subtitles.every((subtitle) => subtitle.phraseIds.every((phraseId) => phraseIds.has(phraseId)))
+    phrases.every((phrase) => subtitleIds.has(phrase.cueId)) &&
+    subtitles.every((subtitle) => subtitle.phraseIds.every((phraseId) => phraseIds.has(phraseId)))
   );
 }
 
 export function assertLearningSubtitleResult(value: unknown, message = "Invalid learning subtitle result"): asserts value is LearningSubtitleResult {
   if (!isValidLearningSubtitleResult(value)) {
+    throw new Error(message);
+  }
+}
+
+export function isValidAgentOutput(value: unknown): value is AgentOutput {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.subtitles) &&
+    value.subtitles.length > 0 &&
+    value.subtitles.every(isValidSubtitleCue) &&
+    Array.isArray(value.phrases) &&
+    value.phrases.length > 0 &&
+    value.phrases.every(isValidPhraseExplanation) &&
+    hasValidPhraseReferences(value.subtitles, value.phrases)
+  );
+}
+
+export function assertAgentOutput(value: unknown, message = "Invalid agent output"): asserts value is AgentOutput {
+  if (!isValidAgentOutput(value)) {
     throw new Error(message);
   }
 }
