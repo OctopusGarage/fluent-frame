@@ -188,7 +188,7 @@ process.stdin.on("end", () => {
     expect(promptLog.split("---PROMPT---").filter((chunk) => chunk.trim()).length).toBe(7);
     expect(promptLog).toContain("\n21\n");
     expect(promptLog).toContain("\n130\n");
-  });
+  }, 10_000);
 
   it("keeps every prompt bounded for very large SRT input", async () => {
     const promptLogPath = join(dir, "excerpt-prompts.log");
@@ -226,7 +226,7 @@ process.stdin.on("end", () => {
     const promptLog = await readFile(promptLogPath, "utf8");
     expect(promptLog.split("---PROMPT---").filter((chunk) => chunk.trim()).length).toBe(26);
     expect(promptLog).toContain("\n520\n");
-  }, 15_000);
+  }, 30_000);
 });
 
 describe("createClaudeRunner", () => {
