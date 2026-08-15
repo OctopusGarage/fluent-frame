@@ -103,9 +103,16 @@ function findNamedExports(source, names) {
 
   for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
     const exportList = match[1];
-    for (const name of names) {
-      if (new RegExp(`(^|,)\\s*(?:type\\s+)?${escapesForRegex(name)}(?:\\s+as\\s+\\w+)?\\s*(,|$)`).test(exportList)) {
-        exportedNames.push(name);
+    for (const exportEntry of exportList.split(",")) {
+      const [localName, exportedAlias] = exportEntry
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)
+        .map((part) => part.trim());
+      for (const name of names) {
+        if (localName === name || exportedAlias === name) {
+          exportedNames.push(name);
+        }
       }
     }
   }
@@ -132,6 +139,13 @@ test("workspace package source and tests keep documented architecture boundaries
   }
 
   assert.deepEqual(violations, []);
+});
+
+test("named export scanner catches forbidden aliases", () => {
+  assert.deepEqual(
+    findNamedExports("export { localRequestId as createRequestId };", ["createRequestId"]),
+    ["createRequestId"],
+  );
 });
 
 test("workspace package manifests keep app dependencies one-way through shared", () => {
