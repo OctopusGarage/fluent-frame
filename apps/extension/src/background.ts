@@ -68,6 +68,11 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
 
+function createExtensionErrorResponse(error: unknown): HostResponse {
+  const extensionError = normalizeExtensionError(error);
+  return createErrorResponse(createRequestId(), extensionError.code, extensionError.message);
+}
+
 function registerStreamingPortListener(runtime: ExtensionRuntime): void {
   runtime.onConnect?.addListener((contentPort) => {
     if (contentPort.name !== "fluent-frame-process-video") {
@@ -83,8 +88,7 @@ function registerStreamingPortListener(runtime: ExtensionRuntime): void {
       try {
         request = createProcessVideoRequest(message.videoId, true);
       } catch (error) {
-        const extensionError = normalizeExtensionError(error);
-        contentPort.postMessage(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
+        contentPort.postMessage(createExtensionErrorResponse(error));
         return;
       }
       nativeStream = streamNativeRequest(runtime, request, {
@@ -124,8 +128,7 @@ function forwardCreatedNativeRequest(
   try {
     return forwardNativeRequest(runtime, createRequest(), sendResponse);
   } catch (error) {
-    const extensionError = normalizeExtensionError(error);
-    sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
+    sendResponse(createExtensionErrorResponse(error));
     return false;
   }
 }
