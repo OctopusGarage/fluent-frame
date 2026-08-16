@@ -117,6 +117,13 @@ function findNamedExports(source, names) {
     }
   }
 
+  for (const match of source.matchAll(/export\s+(?:async\s+)?(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)/g)) {
+    const exportedName = match[1];
+    if (names.includes(exportedName)) {
+      exportedNames.push(exportedName);
+    }
+  }
+
   return exportedNames;
 }
 
@@ -144,6 +151,13 @@ test("workspace package source and tests keep documented architecture boundaries
 test("named export scanner catches forbidden aliases", () => {
   assert.deepEqual(
     findNamedExports("export { localRequestId as createRequestId };", ["createRequestId"]),
+    ["createRequestId"],
+  );
+});
+
+test("named export scanner catches forbidden direct declarations", () => {
+  assert.deepEqual(
+    findNamedExports("export function createRequestId() {}", ["createRequestId"]),
     ["createRequestId"],
   );
 });
