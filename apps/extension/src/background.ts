@@ -116,6 +116,20 @@ function forwardNativeRequest(
   return true;
 }
 
+function forwardCreatedNativeRequest(
+  runtime: ExtensionRuntime,
+  createRequest: () => HostRequest,
+  sendResponse: (response: HostResponse) => void,
+): true | false {
+  try {
+    return forwardNativeRequest(runtime, createRequest(), sendResponse);
+  } catch (error) {
+    const extensionError = normalizeExtensionError(error);
+    sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
+    return false;
+  }
+}
+
 function enqueueContextMenuVideo(
   runtime: ExtensionRuntime,
   input: { url?: string; title?: string },
@@ -227,43 +241,23 @@ export function registerBackgroundListener(runtime: ExtensionRuntime): void {
     }
 
     if (isObject(message) && message.type === "enqueueVideo") {
-      let request: HostRequest;
-      try {
-        request = createEnqueueVideoRequest({
+      return forwardCreatedNativeRequest(
+        runtime,
+        () => createEnqueueVideoRequest({
           videoId: message.videoId,
           url: message.url,
           title: message.title,
-        });
-      } catch (error) {
-        const extensionError = normalizeExtensionError(error);
-        sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
-        return false;
-      }
-      return forwardNativeRequest(runtime, request, sendResponse);
+        }),
+        sendResponse,
+      );
     }
 
     if (isObject(message) && message.type === "removeQueueJob") {
-      let request: HostRequest;
-      try {
-        request = createRemoveQueueJobRequest(message.jobId);
-      } catch (error) {
-        const extensionError = normalizeExtensionError(error);
-        sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
-        return false;
-      }
-      return forwardNativeRequest(runtime, request, sendResponse);
+      return forwardCreatedNativeRequest(runtime, () => createRemoveQueueJobRequest(message.jobId), sendResponse);
     }
 
     if (isObject(message) && message.type === "retryQueueJob") {
-      let request: HostRequest;
-      try {
-        request = createRetryQueueJobRequest(message.jobId);
-      } catch (error) {
-        const extensionError = normalizeExtensionError(error);
-        sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
-        return false;
-      }
-      return forwardNativeRequest(runtime, request, sendResponse);
+      return forwardCreatedNativeRequest(runtime, () => createRetryQueueJobRequest(message.jobId), sendResponse);
     }
 
     if (isObject(message) && message.type === "healthCheck") {
@@ -275,28 +269,11 @@ export function registerBackgroundListener(runtime: ExtensionRuntime): void {
     }
 
     if (isObject(message) && message.type === "savePersonalNotes") {
-      let request: HostRequest;
-      try {
-        request = createSavePersonalNotesRequest(message.notes);
-      } catch (error) {
-        const extensionError = normalizeExtensionError(error);
-        sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
-        return false;
-      }
-      return forwardNativeRequest(runtime, request, sendResponse);
+      return forwardCreatedNativeRequest(runtime, () => createSavePersonalNotesRequest(message.notes), sendResponse);
     }
 
     if (isObject(message) && message.type === "processCurrentVideo") {
-      let request: HostRequest;
-      try {
-        request = createProcessVideoRequest(message.videoId);
-      } catch (error) {
-        const extensionError = normalizeExtensionError(error);
-        sendResponse(createErrorResponse(createRequestId(), extensionError.code, extensionError.message));
-        return false;
-      }
-
-      return forwardNativeRequest(runtime, request, sendResponse);
+      return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
     }
     return false;
   });
