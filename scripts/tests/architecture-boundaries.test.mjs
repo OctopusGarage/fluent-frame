@@ -210,6 +210,45 @@ test("extension runtime entrypoint does not re-export request or native-client i
   assert.deepEqual(forbiddenReExports, []);
 });
 
+test("extension runtime entrypoint does not re-export queue context-menu internals", () => {
+  const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
+  const source = readFileSync(backgroundPath, "utf8");
+  const forbiddenReExports = [
+    ...findImportSpecifiers(source)
+      .filter((specifier) => specifier === "./backgroundQueueContextMenus.js")
+      .filter((specifier) => hasReExportFrom(source, specifier)),
+    ...findNamedExports(source, ["registerQueueContextMenus", "rememberQueueContextMenuLink"]),
+  ];
+
+  assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension runtime entrypoint does not re-export streaming internals", () => {
+  const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
+  const source = readFileSync(backgroundPath, "utf8");
+  const forbiddenReExports = [
+    ...findImportSpecifiers(source)
+      .filter((specifier) => specifier === "./backgroundStreaming.js")
+      .filter((specifier) => hasReExportFrom(source, specifier)),
+    ...findNamedExports(source, ["registerStreamingPortListener"]),
+  ];
+
+  assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension runtime entrypoint does not re-export one-shot native message internals", () => {
+  const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
+  const source = readFileSync(backgroundPath, "utf8");
+  const forbiddenReExports = [
+    ...findImportSpecifiers(source)
+      .filter((specifier) => specifier === "./backgroundNativeMessages.js")
+      .filter((specifier) => hasReExportFrom(source, specifier)),
+    ...findNamedExports(source, ["registerNativeMessageListener"]),
+  ];
+
+  assert.deepEqual(forbiddenReExports, []);
+});
+
 test("extension native client does not re-export request-id helpers", () => {
   const nativeHostClientPath = resolve(repoRoot, "apps/extension/src/nativeHostClient.ts");
   const source = readFileSync(nativeHostClientPath, "utf8");

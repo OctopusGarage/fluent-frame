@@ -24,6 +24,9 @@ Use deep modules at stable seams:
 - Keep detached worker spawning behind `queueWorkerProcess`.
 - Keep queue cache/title adapters behind `queueSupport`.
 - Keep background host request construction behind `backgroundRequests`.
+- Keep background one-shot runtime message routing behind `backgroundNativeMessages`.
+- Keep background queue context-menu registration and remembered link state behind `backgroundQueueContextMenus`.
+- Keep background streaming content-port relay behind `backgroundStreaming`.
 - Keep native transport behind `nativeHostClient`.
 - Keep learning pane persistence behind `uiPersistence`.
 - Keep learning pane layout mutation/restoration behind `uiLayoutController`.
