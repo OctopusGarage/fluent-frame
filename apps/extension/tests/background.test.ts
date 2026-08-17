@@ -2,9 +2,9 @@ import { NATIVE_HOST_NAME, WORKFLOW_VERSION } from "@fluent-frame/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   registerBackgroundListener,
-  registerQueueContextMenus,
   type ExtensionRuntime,
 } from "../src/background.js";
+import { registerQueueContextMenus } from "../src/backgroundQueueContextMenus.js";
 import { createRequestId } from "../src/requestId.js";
 import { normalizeExtensionError, normalizeNativeResponse } from "../src/nativeHostClient.js";
 
