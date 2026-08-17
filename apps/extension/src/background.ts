@@ -14,28 +14,20 @@ import {
   rememberQueueContextMenuLink,
   type QueueContextMenuChromeApi,
 } from "./backgroundQueueContextMenus.js";
+import { registerStreamingPortListener, type StreamingRuntime } from "./backgroundStreaming.js";
 import {
   createErrorResponse,
   normalizeExtensionError,
-  normalizeNativeResponse,
   sendNativeRequest,
-  streamNativeRequest,
-  type ExtensionError,
-  type RuntimePort,
+  type NativeClientRuntime,
 } from "./nativeHostClient.js";
 import { createRequestId } from "./requestId.js";
 
-export type ExtensionRuntime = {
-  lastError: chrome.runtime.LastError | undefined;
-  connectNative?(hostName: string): RuntimePort;
-  sendNativeMessage(hostName: string, request: HostRequest, callback: (response: unknown) => void): void;
+export type ExtensionRuntime = NativeClientRuntime & StreamingRuntime & {
   onMessage: {
     addListener(
       callback: (message: unknown, sender: unknown, sendResponse: (response: HostResponse) => void) => boolean,
     ): void;
-  };
-  onConnect?: {
-    addListener(callback: (port: RuntimePort) => void): void;
   };
 };
 
@@ -53,41 +45,6 @@ export function isObject(value: unknown): value is Record<string, unknown> {
 function createExtensionErrorResponse(error: unknown): HostResponse {
   const extensionError = normalizeExtensionError(error);
   return createErrorResponse(createRequestId(), extensionError.code, extensionError.message);
-}
-
-function registerStreamingPortListener(runtime: ExtensionRuntime): void {
-  runtime.onConnect?.addListener((contentPort) => {
-    if (contentPort.name !== "fluent-frame-process-video") {
-      return;
-    }
-    let nativeStream: { disconnect(): void } | undefined;
-
-    contentPort.onMessage.addListener((message: unknown) => {
-      if (!isObject(message) || message.type !== "processCurrentVideoStream") {
-        return;
-      }
-      let request: HostRequest;
-      try {
-        request = createProcessVideoRequest(message.videoId, true);
-      } catch (error) {
-        contentPort.postMessage(createExtensionErrorResponse(error));
-        return;
-      }
-      nativeStream = streamNativeRequest(runtime, request, {
-        onMessage(response) {
-          contentPort.postMessage(response);
-        },
-        onDisconnectBeforeTerminal(requestId) {
-          contentPort.postMessage(createErrorResponse(requestId, "NATIVE_HOST_DISCONNECTED", "Native host disconnected"));
-        },
-      });
-    });
-
-    contentPort.onDisconnect.addListener(() => {
-      nativeStream?.disconnect();
-      nativeStream = undefined;
-    });
-  });
 }
 
 function forwardNativeRequest(
