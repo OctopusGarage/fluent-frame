@@ -1,13 +1,12 @@
 import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import { createProcessVideoRequest } from "./backgroundRequests.js";
 import {
+  createExtensionErrorResponse,
   createErrorResponse,
-  normalizeExtensionError,
   streamNativeRequest,
   type NativeClientRuntime,
   type RuntimePort,
 } from "./nativeHostClient.js";
-import { createRequestId } from "./requestId.js";
 
 export type StreamingRuntime = NativeClientRuntime & {
   onConnect?: {
@@ -17,11 +16,6 @@ export type StreamingRuntime = NativeClientRuntime & {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
-}
-
-function createExtensionErrorResponse(error: unknown): HostResponse {
-  const extensionError = normalizeExtensionError(error);
-  return createErrorResponse(createRequestId(), extensionError.code, extensionError.message);
 }
 
 export function registerStreamingPortListener(runtime: StreamingRuntime): void {

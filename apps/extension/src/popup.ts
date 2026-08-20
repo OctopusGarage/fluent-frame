@@ -1,6 +1,7 @@
 import type { HostResponse } from "@fluent-frame/shared";
 import { createPopupQueue } from "./popupQueue.js";
-import { createPopupTabs, parseYoutubeVideoIdFromUrl } from "./popupTabs.js";
+import { createPopupTabs } from "./popupTabs.js";
+import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
 
 const QUEUE_REFRESH_INTERVAL_MS = 5_000;
 
@@ -110,7 +111,7 @@ document.getElementById("enqueue-url-form")?.addEventListener("submit", (event) 
   event.preventDefault();
   const input = document.getElementById("enqueue-url");
   const value = input instanceof HTMLInputElement ? input.value : "";
-  const videoId = parseYoutubeVideoIdFromUrl(value);
+  const videoId = extractYoutubeVideoIdFromUrl(value);
   if (!videoId) {
     setStatus("Paste a valid YouTube video URL.");
     return;

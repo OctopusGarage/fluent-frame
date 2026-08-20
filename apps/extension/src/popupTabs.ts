@@ -5,10 +5,6 @@ export type PopupTabsDeps = {
   setStatus(message: string): void;
 };
 
-export function parseYoutubeVideoIdFromUrl(value: string): string | undefined {
-  return extractYoutubeVideoIdFromUrl(value);
-}
-
 export function createPopupTabs(deps: PopupTabsDeps) {
   async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
     const [tab] = await deps.tabs.query({ active: true, currentWindow: true });
@@ -45,7 +41,7 @@ export function createPopupTabs(deps: PopupTabsDeps) {
       try {
         const tab = await activeTab();
         const tabUrl = tab?.url;
-        const videoId = tabUrl ? parseYoutubeVideoIdFromUrl(tabUrl) : undefined;
+        const videoId = extractYoutubeVideoIdFromUrl(tabUrl);
         if (!videoId || !tabUrl) {
           deps.setStatus("Open a YouTube video first.");
           return;
