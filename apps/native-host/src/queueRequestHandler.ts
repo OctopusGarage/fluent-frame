@@ -2,8 +2,8 @@ import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
 import { createQueueCoordinator } from "./queueCoordinator.js";
 import { createQueueRunner, type QueueRunner } from "./queueRunner.js";
-import { createQueueStore } from "./queueStore.js";
-import { createLogger } from "./logger.js";
+import { createQueueStore, type QueueStore } from "./queueStore.js";
+import { createLogger, type Logger } from "./logger.js";
 import { createQueuedJobProcessor } from "./queueProcessor.js";
 import { createQueueEventLogger } from "./queueEventLogger.js";
 import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
@@ -16,6 +16,13 @@ type RetryQueueJobRequest = Extract<HostRequest, { type: "retryQueueJob" }>;
 
 const runners = new Map<string, QueueRunner>();
 
+type QueueRuntime = {
+  logger: Logger;
+  store: QueueStore;
+  runner(): QueueRunner;
+  startQueue(): void;
+};
+
 function queueErrorResponse(id: string, error: unknown): HostResponse {
   return {
     id,
@@ -26,13 +33,11 @@ function queueErrorResponse(id: string, error: unknown): HostResponse {
   };
 }
 
-function queueRunner(config: HostConfig): QueueRunner {
+function queueRunner(config: HostConfig, logger: Logger, store: QueueStore): QueueRunner {
   const existing = runners.get(config.queueFile);
   if (existing) {
     return existing;
   }
-  const logger = createLogger(config.logFile);
-  const store = createQueueStore(config.queueFile);
   const runner = createQueueRunner({
     store,
     logger,
@@ -42,20 +47,30 @@ function queueRunner(config: HostConfig): QueueRunner {
   return runner;
 }
 
+function createQueueRuntime(config: HostConfig): QueueRuntime {
+  const logger = createLogger(config.logFile);
+  const store = createQueueStore(config.queueFile);
+  return {
+    logger,
+    store,
+    runner: () => queueRunner(config, logger, store),
+    startQueue: () => startQueue(config),
+  };
+}
+
 export async function runQueueWorker(config: HostConfig): Promise<void> {
-  await queueRunner(config).start();
+  await createQueueRuntime(config).runner().start();
 }
 
 export function createQueueRequestHandler(config: HostConfig) {
-  const logger = createLogger(config.logFile);
-  const store = createQueueStore(config.queueFile);
+  const runtime = createQueueRuntime(config);
   function requestCoordinator(requestId: string) {
     return createQueueCoordinator({
-      store,
+      store: runtime.store,
       cacheReady: (input) => cacheReady(config, input),
       resolveTitle: (videoId, title) => resolveVideoTitle(config, videoId, title),
-      startQueue: () => startQueue(config),
-      log: createQueueEventLogger(logger, requestId),
+      startQueue: runtime.startQueue,
+      log: createQueueEventLogger(runtime.logger, requestId),
     });
   }
   return {
