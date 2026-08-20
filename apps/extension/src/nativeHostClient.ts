@@ -4,6 +4,7 @@ import {
   type HostRequest,
   type HostResponse,
 } from "@fluent-frame/shared";
+import { createRequestId } from "./requestId.js";
 
 export type ExtensionError = {
   code: string;
@@ -42,6 +43,11 @@ export function normalizeExtensionError(error: unknown): ExtensionError {
 
 export function createErrorResponse(id: string, code: string, message: string): HostResponse {
   return { id, ok: false, type: "error", code, message };
+}
+
+export function createExtensionErrorResponse(error: unknown): HostResponse {
+  const extensionError = normalizeExtensionError(error);
+  return createErrorResponse(createRequestId(), extensionError.code, extensionError.message);
 }
 
 export function normalizeNativeResponse(expectedId: string, response: unknown): HostResponse {

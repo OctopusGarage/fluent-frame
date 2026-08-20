@@ -11,12 +11,12 @@ import {
 } from "./backgroundRequests.js";
 import { rememberQueueContextMenuLink } from "./backgroundQueueContextMenus.js";
 import {
+  createExtensionErrorResponse,
   createErrorResponse,
   normalizeExtensionError,
   sendNativeRequest,
   type NativeClientRuntime,
 } from "./nativeHostClient.js";
-import { createRequestId } from "./requestId.js";
 
 export type NativeMessageRuntime = NativeClientRuntime & {
   onMessage: {
@@ -28,11 +28,6 @@ export type NativeMessageRuntime = NativeClientRuntime & {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
-}
-
-function createExtensionErrorResponse(error: unknown): HostResponse {
-  const extensionError = normalizeExtensionError(error);
-  return createErrorResponse(createRequestId(), extensionError.code, extensionError.message);
 }
 
 function forwardNativeRequest(
