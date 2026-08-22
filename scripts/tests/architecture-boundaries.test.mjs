@@ -274,3 +274,12 @@ test("shared host response parser does not import request parser runtime", () =>
 
   assert.deepEqual(forbiddenRuntimeImports, []);
 });
+
+test("shared YouTube video ID parser has one runtime owner", () => {
+  const sharedSourceRoot = resolve(repoRoot, "packages/shared/src");
+  const owners = listSourceFiles(sharedSourceRoot)
+    .filter((filePath) => /function\s+parseYoutubeVideoId\s*\(/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+
+  assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
+});
