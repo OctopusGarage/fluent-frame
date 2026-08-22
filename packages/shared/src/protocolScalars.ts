@@ -4,3 +4,10 @@ export function parseYoutubeVideoId(value: unknown): string {
   }
   return value;
 }
+
+export function parseCaptionLanguage(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-z]{2,3}(-[A-Za-z0-9]+)?$/.test(value)) {
+    throw new Error("Invalid caption language");
+  }
+  return value;
+}

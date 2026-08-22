@@ -283,3 +283,12 @@ test("shared YouTube video ID parser has one runtime owner", () => {
 
   assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
 });
+
+test("shared caption language parser has one runtime owner", () => {
+  const sharedSourceRoot = resolve(repoRoot, "packages/shared/src");
+  const owners = listSourceFiles(sharedSourceRoot)
+    .filter((filePath) => /function\s+parseCaptionLanguage\s*\(/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+
+  assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
+});
