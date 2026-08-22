@@ -98,6 +98,10 @@ function hasReExportFrom(source, specifier) {
   return new RegExp(`export\\s+[^;]*from\\s+["']${escapesForRegex(specifier)}["']`).test(source);
 }
 
+function findRuntimeImportSpecifiers(source) {
+  return [...source.matchAll(/import\s+(?!type\b)(?:[^"'()]*?\s+from\s+)?["']([^"']+)["']/g)].map((match) => match[1]);
+}
+
 function findNamedExports(source, names) {
   const exportedNames = [];
 
@@ -260,4 +264,13 @@ test("extension native client does not re-export request-id helpers", () => {
   ];
 
   assert.deepEqual(forbiddenReExports, []);
+});
+
+test("shared host response parser does not import request parser runtime", () => {
+  const hostResponsePath = resolve(repoRoot, "packages/shared/src/hostResponse.ts");
+  const source = readFileSync(hostResponsePath, "utf8");
+  const forbiddenRuntimeImports = findRuntimeImportSpecifiers(source)
+    .filter((specifier) => specifier === "./protocol.js");
+
+  assert.deepEqual(forbiddenRuntimeImports, []);
 });

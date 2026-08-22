@@ -1,7 +1,9 @@
-import { parsePersonalNotesWithVideoIdParser, parseUsageNotes } from "./personalNotes.js";
+import { parsePersonalNotes, parseUsageNotes } from "./personalNotes.js";
+import { parseYoutubeVideoId } from "./protocolScalars.js";
 import { parseQueueJobId, type QueueJob, type QueueState } from "./queue.js";
 export { parseHostResponse } from "./hostResponse.js";
-export { parseUsageNotes } from "./personalNotes.js";
+export { parsePersonalNotes, parseUsageNotes } from "./personalNotes.js";
+export { parseYoutubeVideoId } from "./protocolScalars.js";
 export { parseQueueJob, parseQueueJobId, parseQueueState } from "./queue.js";
 export type { QueueJob, QueueJobStatus, QueueState } from "./queue.js";
 
@@ -125,17 +127,6 @@ export type HostResponse =
   | { id: string; ok: true; type: "cacheMiss" }
   | { id: string; ok: true; type: "cacheCleared" }
   | { id: string; ok: false; type: "error"; code: string; message: string };
-
-export function parsePersonalNotes(value: unknown): PersonalNote[] {
-  return parsePersonalNotesWithVideoIdParser(value, parseYoutubeVideoId);
-}
-
-export function parseYoutubeVideoId(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(value)) {
-    throw new Error("Invalid YouTube video ID");
-  }
-  return value;
-}
 
 export function parseCaptionLanguage(value: unknown): string {
   if (typeof value !== "string" || !/^[a-z]{2,3}(-[A-Za-z0-9]+)?$/.test(value)) {
