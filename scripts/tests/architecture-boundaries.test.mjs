@@ -98,6 +98,10 @@ function hasReExportFrom(source, specifier) {
   return new RegExp(`export\\s+[^;]*from\\s+["']${escapesForRegex(specifier)}["']`).test(source);
 }
 
+function findRuntimeImportSpecifiers(source) {
+  return [...source.matchAll(/import\s+(?!type\b)(?:[^"'()]*?\s+from\s+)?["']([^"']+)["']/g)].map((match) => match[1]);
+}
+
 function findNamedExports(source, names) {
   const exportedNames = [];
 
@@ -260,4 +264,31 @@ test("extension native client does not re-export request-id helpers", () => {
   ];
 
   assert.deepEqual(forbiddenReExports, []);
+});
+
+test("shared host response parser does not import request parser runtime", () => {
+  const hostResponsePath = resolve(repoRoot, "packages/shared/src/hostResponse.ts");
+  const source = readFileSync(hostResponsePath, "utf8");
+  const forbiddenRuntimeImports = findRuntimeImportSpecifiers(source)
+    .filter((specifier) => specifier === "./protocol.js");
+
+  assert.deepEqual(forbiddenRuntimeImports, []);
+});
+
+test("shared YouTube video ID parser has one runtime owner", () => {
+  const sharedSourceRoot = resolve(repoRoot, "packages/shared/src");
+  const owners = listSourceFiles(sharedSourceRoot)
+    .filter((filePath) => /function\s+parseYoutubeVideoId\s*\(/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+
+  assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
+});
+
+test("shared caption language parser has one runtime owner", () => {
+  const sharedSourceRoot = resolve(repoRoot, "packages/shared/src");
+  const owners = listSourceFiles(sharedSourceRoot)
+    .filter((filePath) => /function\s+parseCaptionLanguage\s*\(/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+
+  assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
 });

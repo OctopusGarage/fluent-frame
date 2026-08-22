@@ -1,4 +1,5 @@
 import type { PersonalNote, UsageNote } from "./protocol.js";
+import { parseYoutubeVideoId } from "./protocolScalars.js";
 
 function isSafeNoteId(value: string): boolean {
   return /^[A-Za-z0-9_.:-]{1,240}$/.test(value) && !value.includes("..");
@@ -65,10 +66,7 @@ function parsePersonalNote(value: unknown, parseYoutubeVideoId: (value: unknown)
   };
 }
 
-export function parsePersonalNotesWithVideoIdParser(
-  value: unknown,
-  parseYoutubeVideoId: (value: unknown) => string,
-): PersonalNote[] {
+export function parsePersonalNotes(value: unknown): PersonalNote[] {
   if (!Array.isArray(value)) {
     throw new Error("Invalid personal notes");
   }

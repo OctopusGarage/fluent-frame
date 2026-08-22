@@ -1,3 +1,5 @@
+import { parseCaptionLanguage, parseYoutubeVideoId } from "./protocolScalars.js";
+
 export type QueueJobStatus = "queued" | "running" | "done" | "failed" | "skipped";
 
 export type QueueJob = {
@@ -54,20 +56,6 @@ function parseOptionalNonNegativeNumber(value: unknown, message: string): number
 export function parseQueueJobId(value: unknown): string {
   if (typeof value !== "string" || value.includes("..") || !/^[A-Za-z0-9_-]{11}:[a-z]{2,3}(-[A-Za-z0-9]+)?:[A-Za-z0-9_.:-]{1,120}$/.test(value)) {
     throw new Error("Invalid queue job ID");
-  }
-  return value;
-}
-
-function parseYoutubeVideoId(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(value)) {
-    throw new Error("Invalid YouTube video ID");
-  }
-  return value;
-}
-
-function parseCaptionLanguage(value: unknown): string {
-  if (typeof value !== "string" || !/^[a-z]{2,3}(-[A-Za-z0-9]+)?$/.test(value)) {
-    throw new Error("Invalid caption language");
   }
   return value;
 }
