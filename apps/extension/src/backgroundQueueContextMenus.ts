@@ -1,10 +1,8 @@
 import type { HostResponse } from "@fluent-frame/shared";
-import {
-  createEnqueueVideoRequest,
-  extractYoutubeVideoIdFromUrl,
-} from "./backgroundRequests.js";
+import { createEnqueueVideoRequest } from "./backgroundRequests.js";
 import { sendNativeRequest, type NativeClientRuntime } from "./nativeHostClient.js";
 import { createRequestId } from "./requestId.js";
+import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
 
 type ContextMenusApi = {
   removeAll(callback?: () => void): void;
