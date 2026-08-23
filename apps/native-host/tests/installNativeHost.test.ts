@@ -4,7 +4,6 @@ import {
   buildManagedHostRuntimeInstallPlan,
   buildNativeHostManifest,
   buildNativeHostWrapper,
-  LEGACY_NATIVE_HOST_NAME,
   PLACEHOLDER_ALLOWED_ORIGIN,
   resolveManagedHostPath,
   resolveAllowedOrigins,
@@ -65,11 +64,6 @@ describe("native host installer", () => {
       to: "/Users/example/.fluent-frame/host/native-host/prompts",
       recursive: true,
     });
-  });
-
-  it("keeps the legacy native host name available for installer cleanup", () => {
-    expect(LEGACY_NATIVE_HOST_NAME).toBe("com.octopusgarage.youtube_english_coach");
-    expect(LEGACY_NATIVE_HOST_NAME).not.toBe(NATIVE_HOST_NAME);
   });
 
   it("builds wrapper content with the current node executable and compiled host path", () => {

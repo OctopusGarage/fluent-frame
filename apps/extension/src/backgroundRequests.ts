@@ -5,7 +5,6 @@ import {
   type HostRequest,
 } from "@fluent-frame/shared";
 import { createRequestId } from "./requestId.js";
-import { extractYoutubeVideoIdFromUrl as parseYoutubeUrlVideoId } from "./youtubeUrl.js";
 
 const NATIVE_OPTIONAL_TEXT_MAX_LENGTH = 500;
 
@@ -31,10 +30,6 @@ export function createProcessVideoRequest(videoId: unknown, stream = false): Hos
     captionLanguage: "en",
     ...(stream ? { stream: true } : {}),
   };
-}
-
-export function extractYoutubeVideoIdFromUrl(url: string | undefined): string | undefined {
-  return parseYoutubeUrlVideoId(url);
 }
 
 export function createGetPersonalNotesRequest(): HostRequest {
