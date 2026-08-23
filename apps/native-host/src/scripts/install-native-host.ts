@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { NATIVE_HOST_NAME, type AgentName } from "@fluent-frame/shared";
 
 export const PLACEHOLDER_ALLOWED_ORIGIN = "chrome-extension://EXTENSION_ID_FROM_CHROME/";
-export const LEGACY_NATIVE_HOST_NAME = "com.octopusgarage.youtube_english_coach";
+const LEGACY_NATIVE_HOST_NAME = "com.octopusgarage.youtube_english_coach";
 const execFileAsync = promisify(execFile);
 
 export type NativeHostManifest = {
