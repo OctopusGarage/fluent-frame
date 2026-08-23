@@ -284,6 +284,14 @@ test("shared YouTube video ID parser has one runtime owner", () => {
   assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
 });
 
+test("extension YouTube URL parser delegates ID validation to shared parser", () => {
+  const youtubeUrlPath = resolve(repoRoot, "apps/extension/src/youtubeUrl.ts");
+  const source = readFileSync(youtubeUrlPath, "utf8");
+
+  assert.match(source, /import\s+\{\s*parseYoutubeVideoId\s*\}\s+from\s+["']@fluent-frame\/shared["']/);
+  assert.doesNotMatch(source, /\/\^\[A-Za-z0-9_-\]\{11\}\$\/|YOUTUBE_VIDEO_ID_PATTERN/);
+});
+
 test("shared caption language parser has one runtime owner", () => {
   const sharedSourceRoot = resolve(repoRoot, "packages/shared/src");
   const owners = listSourceFiles(sharedSourceRoot)

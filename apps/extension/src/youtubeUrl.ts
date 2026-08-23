@@ -1,7 +1,14 @@
-const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
+import { parseYoutubeVideoId } from "@fluent-frame/shared";
 
 function validVideoId(value: string | null | undefined): string | undefined {
-  return value && YOUTUBE_VIDEO_ID_PATTERN.test(value) ? value : undefined;
+  if (!value) {
+    return undefined;
+  }
+  try {
+    return parseYoutubeVideoId(value);
+  } catch {
+    return undefined;
+  }
 }
 
 export function extractYoutubeVideoIdFromUrl(url: string | undefined): string | undefined {
