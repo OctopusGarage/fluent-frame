@@ -4,6 +4,7 @@ import {
   buildManagedHostRuntimeInstallPlan,
   buildNativeHostManifest,
   buildNativeHostWrapper,
+  assertManagedHostRuntime,
   PLACEHOLDER_ALLOWED_ORIGIN,
   resolveManagedHostPath,
   resolveAllowedOrigins,
@@ -64,6 +65,25 @@ describe("native host installer", () => {
       to: "/Users/example/.fluent-frame/host/native-host/prompts",
       recursive: true,
     });
+  });
+
+  it("rejects managed native host runtimes missing prompt assets", () => {
+    expect(() =>
+      assertManagedHostRuntime("/Users/example/.fluent-frame/host/native-host", (path) =>
+        path === "/Users/example/.fluent-frame/host/native-host/index.js"
+      ),
+    ).toThrow(
+      "Managed native host runtime is incomplete: /Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md",
+    );
+  });
+
+  it("accepts managed native host runtimes with prompt assets", () => {
+    expect(() =>
+      assertManagedHostRuntime("/Users/example/.fluent-frame/host/native-host", (path) =>
+        path === "/Users/example/.fluent-frame/host/native-host/index.js" ||
+        path === "/Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md"
+      ),
+    ).not.toThrow();
   });
 
   it("builds wrapper content with the current node executable and compiled host path", () => {

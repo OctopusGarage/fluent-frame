@@ -9,11 +9,14 @@ import type { LocalAgentAdapter } from "./localAgentAdapter.js";
 import { runClaude, runCodex } from "./localAgentProcess.js";
 export type { AgentOutput, AgentBatchProgress, AgentRunnerOptions, AgentRunner } from "./agentTypes.js";
 
-async function existingPromptPath(): Promise<string> {
-  const moduleDir = dirname(fileURLToPath(import.meta.url));
+export async function existingPromptPath(
+  moduleDir = dirname(fileURLToPath(import.meta.url)),
+  cwd = process.cwd(),
+): Promise<string> {
   const candidates = [
+    join(moduleDir, "prompts", "youtube-learning-subtitles.md"),
     join(moduleDir, "..", "prompts", "youtube-learning-subtitles.md"),
-    join(process.cwd(), "apps", "native-host", "prompts", "youtube-learning-subtitles.md"),
+    join(cwd, "apps", "native-host", "prompts", "youtube-learning-subtitles.md"),
   ];
   for (const candidate of candidates) {
     try {

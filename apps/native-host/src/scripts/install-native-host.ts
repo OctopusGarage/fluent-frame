@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -158,6 +159,17 @@ export function buildManagedHostRuntimeInstallPlan(sourceHostDir: string, manage
   ];
 }
 
+export function assertManagedHostRuntime(managedHostDir: string, exists: (path: string) => boolean = existsSync): void {
+  const requiredPaths = [
+    join(managedHostDir, "index.js"),
+    join(managedHostDir, "prompts", "youtube-learning-subtitles.md"),
+  ];
+  const missingPaths = requiredPaths.filter((path) => !exists(path));
+  if (missingPaths.length > 0) {
+    throw new Error(`Managed native host runtime is incomplete: ${missingPaths.join(", ")}`);
+  }
+}
+
 async function installManagedHostRuntime(sourceHostDir: string, managedHostDir: string): Promise<void> {
   const managedSharedDir = join(managedHostDir, "node_modules", "@fluent-frame", "shared");
 
@@ -167,6 +179,7 @@ async function installManagedHostRuntime(sourceHostDir: string, managedHostDir: 
   for (const entry of buildManagedHostRuntimeInstallPlan(sourceHostDir, managedHostDir)) {
     await cp(entry.from, entry.to, { recursive: entry.recursive });
   }
+  assertManagedHostRuntime(managedHostDir);
 }
 
 export async function installNativeHost(extensionId = resolveExtensionId(process.argv.slice(2), process.env)): Promise<void> {

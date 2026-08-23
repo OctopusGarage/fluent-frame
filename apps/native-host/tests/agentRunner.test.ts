@@ -1,8 +1,8 @@
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createClaudeRunner, createCodexRunner } from "../src/agentRunner.js";
+import { createClaudeRunner, createCodexRunner, existingPromptPath } from "../src/agentRunner.js";
 
 let dir = "";
 
@@ -19,6 +19,17 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
+});
+
+describe("existingPromptPath", () => {
+  it("finds prompt assets copied next to the managed native host runtime", async () => {
+    const runtimeDir = join(dir, "native-host");
+    const promptPath = join(runtimeDir, "prompts", "youtube-learning-subtitles.md");
+    await mkdir(join(runtimeDir, "prompts"), { recursive: true });
+    await writeFile(promptPath, "prompt", "utf8");
+
+    await expect(existingPromptPath(runtimeDir, "/tmp/elsewhere")).resolves.toBe(promptPath);
+  });
 });
 
 describe("createCodexRunner", () => {

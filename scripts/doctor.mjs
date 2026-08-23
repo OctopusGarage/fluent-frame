@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   configPath,
@@ -14,6 +14,11 @@ import {
 } from "./local-common.mjs";
 
 export const managedNativeHostPath = join(homedir(), ".fluent-frame", "host", "native-host", "index.js");
+export const managedNativeHostPromptPath = join(
+  dirname(managedNativeHostPath),
+  "prompts",
+  "youtube-learning-subtitles.md",
+);
 
 function ok(label, passed, detail = "") {
   const mark = passed ? "OK" : "MISSING";
@@ -70,7 +75,9 @@ export function evaluateNativeHostRegistration({
   exists = existsSync,
   nativeHostManifestLocation = nativeHostManifestPath,
   managedHostPath = managedNativeHostPath,
+  managedPromptPath,
 }) {
+  const promptPath = managedPromptPath ?? join(dirname(managedHostPath), "prompts", "youtube-learning-subtitles.md");
   const manifestPath = typeof manifest?.path === "string" ? manifest.path : undefined;
   const originDetail = Array.isArray(manifest?.allowed_origins) ? manifest.allowed_origins.join(", ") : "not linked";
   const linkedOrigin = Array.isArray(manifest?.allowed_origins) &&
@@ -109,6 +116,9 @@ export function evaluateNativeHostRegistration({
     wrapper: { ok: Boolean(manifestPath && exists(manifestPath) && wrapperContent), detail: wrapperDetail },
     node: nodeResult,
     wrapperTarget: targetResult,
+    runtimePrompt: exists(promptPath)
+      ? { ok: true, detail: promptPath }
+      : { ok: false, detail: `${promptPath} does not exist` },
   };
 }
 
@@ -131,6 +141,7 @@ async function main() {
   const wrapperOk = ok("native host wrapper", nativeHostRegistration.wrapper.ok, nativeHostRegistration.wrapper.detail);
   const nodeOk = ok("native host node", nativeHostRegistration.node.ok, nativeHostRegistration.node.detail);
   const wrapperTargetOk = ok("native host target", nativeHostRegistration.wrapperTarget.ok, nativeHostRegistration.wrapperTarget.detail);
+  const runtimePromptOk = ok("native host prompt", nativeHostRegistration.runtimePrompt.ok, nativeHostRegistration.runtimePrompt.detail);
 
   logStep("Tools");
   const ytDlpOk = ok("yt-dlp", Boolean(ytDlpPath), ytDlpPath);
@@ -163,6 +174,7 @@ async function main() {
     wrapperOk &&
     nodeOk &&
     wrapperTargetOk &&
+    runtimePromptOk &&
     ytDlpOk &&
     agentOk;
   logStep(healthy ? "FluentFrame is ready" : "Action needed");
