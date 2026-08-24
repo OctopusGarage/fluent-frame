@@ -1,6 +1,7 @@
-import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parseQueueState, WORKFLOW_VERSION, type QueueJob, type QueueState } from "@fluent-frame/shared";
+import { writeJsonFileAtomically } from "./jsonFile.js";
 
 export type QueueStore = {
   enqueue(input: {
@@ -148,10 +149,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
 
   async function writeState(state: QueueState): Promise<QueueState> {
     const normalized = withRunningJobId(state.jobs);
-    await mkdir(dirname(queueFile), { recursive: true });
-    const tempPath = `${queueFile}.${process.pid}.tmp`;
-    await writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
-    await rename(tempPath, queueFile);
+    await writeJsonFileAtomically(queueFile, normalized);
     return normalized;
   }
 

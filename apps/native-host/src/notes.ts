@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 import { parsePersonalNotes, type PersonalNote } from "@fluent-frame/shared";
+import { writeJsonFileAtomically } from "./jsonFile.js";
 
 type NotesFile = {
   version: 1;
@@ -40,8 +40,5 @@ export async function readPersonalNotes(notesFile: string): Promise<PersonalNote
 export async function writePersonalNotes(notesFile: string, notes: PersonalNote[]): Promise<void> {
   const checkedNotes = parsePersonalNotes(notes);
   const payload: NotesFile = { version: 1, notes: checkedNotes };
-  await mkdir(dirname(notesFile), { recursive: true });
-  const tempFile = `${notesFile}.${process.pid}.tmp`;
-  await writeFile(tempFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  await rename(tempFile, notesFile);
+  await writeJsonFileAtomically(notesFile, payload);
 }
