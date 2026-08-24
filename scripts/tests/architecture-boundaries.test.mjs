@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readdirSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -100,6 +100,46 @@ function hasReExportFrom(source, specifier) {
 
 function findRuntimeImportSpecifiers(source) {
   return [...source.matchAll(/import\s+(?!type\b)(?:[^"'()]*?\s+from\s+)?["']([^"']+)["']/g)].map((match) => match[1]);
+}
+
+function resolveLocalSourceModule(fromFile, specifier) {
+  if (!specifier.startsWith(".")) {
+    return undefined;
+  }
+
+  const resolved = resolve(fromFile, "..", specifier);
+  const candidates = /\.(?:mjs|js|ts|tsx)$/.test(resolved)
+    ? [
+        resolved.replace(/\.(?:mjs|js)$/, ".ts"),
+        resolved.replace(/\.(?:mjs|js)$/, ".tsx"),
+        resolved,
+      ]
+    : [`${resolved}.ts`, `${resolved}.tsx`, join(resolved, "index.ts")];
+
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+function collectRuntimeSourceClosure(entryFile) {
+  const visited = new Set();
+  const pending = [entryFile];
+
+  while (pending.length > 0) {
+    const filePath = pending.pop();
+    if (!filePath || visited.has(filePath)) {
+      continue;
+    }
+    visited.add(filePath);
+
+    const source = readFileSync(filePath, "utf8");
+    for (const specifier of findRuntimeImportSpecifiers(source)) {
+      const resolved = resolveLocalSourceModule(filePath, specifier);
+      if (resolved) {
+        pending.push(resolved);
+      }
+    }
+  }
+
+  return [...visited].sort();
 }
 
 function findNamedExports(source, names) {
@@ -264,6 +304,21 @@ test("extension native client does not re-export request-id helpers", () => {
   ];
 
   assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension content script runtime graph keeps shared protocol imports type-only", () => {
+  const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
+  const violations = [];
+
+  for (const filePath of collectRuntimeSourceClosure(contentPath)) {
+    const source = readFileSync(filePath, "utf8");
+    const runtimeSharedImports = findRuntimeImportSpecifiers(source)
+      .filter((specifier) => specifier === "@fluent-frame/shared")
+      .map((specifier) => `${relative(repoRoot, filePath)} imports ${specifier}`);
+    violations.push(...runtimeSharedImports);
+  }
+
+  assert.deepEqual(violations, []);
 });
 
 test("shared host response parser does not import request parser runtime", () => {

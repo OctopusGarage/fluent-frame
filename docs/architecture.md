@@ -168,6 +168,11 @@ disconnects the active port so stale batches cannot overwrite the new video.
 Both extension and native host import these types so protocol drift is caught by
 TypeScript and tests.
 
+The service worker, popup, and native host may import shared runtime validators
+where they cross the native messaging protocol. The YouTube content script keeps
+shared protocol imports type-only so its bundle stays self-contained and does
+not load a shared runtime chunk on the page.
+
 ## Local Setup Flow
 
 The primary no-store installation path is:

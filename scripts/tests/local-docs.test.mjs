@@ -20,3 +20,10 @@ test("architecture docs keep local install command ownership aligned with README
   assert.match(architecture, /pnpm local:install/);
   assert.match(architecture, /pnpm setup.*alias|alias.*pnpm setup/s);
 });
+
+test("architecture docs document the content script shared-runtime boundary", () => {
+  const architecture = readFileSync(resolve(repoRoot, "docs/architecture.md"), "utf8");
+
+  assert.match(architecture, /content script keeps\s+shared protocol imports type-only/s);
+  assert.match(architecture, /bundle stays self-contained/s);
+});
