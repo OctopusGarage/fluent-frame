@@ -1,5 +1,6 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { assertLearningSubtitleResult, WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
 import { hasCacheIdentity, matchesCacheIdentity } from "./cacheResult.js";
 
@@ -66,8 +67,11 @@ export async function readCacheEntry(cacheDir: string, videoId: string, captionL
 
 export async function writeCachedResult(cacheDir: string, result: LearningSubtitleResult): Promise<void> {
   const path = resultPath(cacheDir, result.videoId, result.sourceLanguage);
-  await mkdir(join(path, ".."), { recursive: true });
-  await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  const cacheEntryDir = dirname(path);
+  const tempPath = join(cacheEntryDir, `result.${process.pid}.${randomUUID()}.tmp`);
+  await mkdir(cacheEntryDir, { recursive: true });
+  await writeFile(tempPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  await rename(tempPath, path);
 }
 
 export async function clearCachedResult(cacheDir: string, videoId: string, captionLanguage: string): Promise<void> {
