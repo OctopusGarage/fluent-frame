@@ -56,7 +56,7 @@ describe("handleProcessVideoRequest", () => {
       });
       options.onEvent?.({ type: "partialResult", result, completedBatches: 1, totalBatches: 2 });
       options.onEvent?.({ type: "fallback", mode: "partialFallback", reason: "agent exited early" });
-      return { mode: "generated", result };
+      return { mode: "generated", cacheHit: false, result };
     });
 
     await expect(
@@ -64,7 +64,7 @@ describe("handleProcessVideoRequest", () => {
         { id: "process1", type: "processVideo", videoId: "dQw4w9WgXcQ", captionLanguage: "en", stream: true },
         { config: {} as HostConfig, logger, emit: (response) => emitted.push(response) },
       ),
-    ).resolves.toEqual({ id: "process1", ok: true, type: "result", result });
+    ).resolves.toEqual({ id: "process1", ok: true, type: "result", result, mode: "generated", cacheHit: false });
 
     expect(emitted).toEqual([
       {

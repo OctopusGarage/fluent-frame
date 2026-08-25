@@ -502,6 +502,25 @@ describe("parseHostResponse", () => {
     });
   });
 
+  it("accepts result responses with processing mode metadata", () => {
+    expect(parseHostResponse("result1", {
+      id: "result1",
+      ok: true,
+      type: "result",
+      result: validLearningSubtitleResult,
+      mode: "partialFallback",
+      fallbackReason: "Codex timed out after 120 seconds",
+    })).toEqual({
+      id: "result1",
+      ok: true,
+      type: "result",
+      result: validLearningSubtitleResult,
+      mode: "partialFallback",
+      fallbackReason: "Codex timed out after 120 seconds",
+    });
+  });
+
+
   it("rejects responses with mismatched IDs or malformed health payloads", () => {
     expect(() => parseHostResponse("expected", {
       id: "actual",

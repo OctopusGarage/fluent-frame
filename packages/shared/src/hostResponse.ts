@@ -114,6 +114,24 @@ function parseProgress(value: unknown): HostProgress {
   };
 }
 
+function parseResultMode(value: unknown): HostResponse extends infer Response
+  ? Response extends { type: "result"; mode?: infer Mode } ? Mode | undefined : never
+  : never {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "cache" ||
+    value === "remoteCache" ||
+    value === "generated" ||
+    value === "partialFallback" ||
+    value === "sourceFallback"
+  ) {
+    return value;
+  }
+  throw new Error("Invalid native host response");
+}
+
 export function parseHostResponse(expectedId: string, response: unknown): HostResponse {
   if (!isObject(response) || response.id !== expectedId || typeof response.ok !== "boolean") {
     throw new Error("Invalid native host response");
@@ -166,7 +184,22 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
     };
   }
   if (response.type === "result" && isValidLearningSubtitleResult(response.result)) {
-    return response as HostResponse;
+    const mode = parseResultMode(response.mode);
+    if (response.cacheHit !== undefined && typeof response.cacheHit !== "boolean") {
+      throw new Error("Invalid native host response");
+    }
+    if (response.fallbackReason !== undefined && typeof response.fallbackReason !== "string") {
+      throw new Error("Invalid native host response");
+    }
+    return {
+      id: expectedId,
+      ok: true,
+      type: "result",
+      result: response.result,
+      ...(mode ? { mode } : {}),
+      ...(response.cacheHit === undefined ? {} : { cacheHit: response.cacheHit }),
+      ...(typeof response.fallbackReason === "string" ? { fallbackReason: response.fallbackReason } : {}),
+    };
   }
   if (response.type === "personalNotes") {
     return { id: expectedId, ok: true, type: "personalNotes", notes: parsePersonalNotes(response.notes) };

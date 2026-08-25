@@ -69,6 +69,28 @@ describe("VideoLearningSession", () => {
     expect(ui.setResult).toHaveBeenCalledWith(result, expect.stringContaining("Learning subtitles ready in"));
   });
 
+  it("renders partial fallback results as incomplete instead of ready", () => {
+    const ui = createUi();
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: {
+        start(_videoId, handlers) {
+          handlers.onResult(result, { mode: "partialFallback", fallbackReason: "Codex timed out after 120 seconds" });
+          return { disconnect: vi.fn() };
+        },
+      },
+      ui,
+      currentVideoId: () => "dQw4w9WgXcQ",
+      reconcilePlayerUi: vi.fn(),
+    });
+
+    session.start("dQw4w9WgXcQ");
+
+    expect(ui.setResult).toHaveBeenCalledWith(result, expect.stringContaining("Partial subtitles saved"));
+    expect(ui.setResult).not.toHaveBeenCalledWith(result, expect.stringContaining("Learning subtitles ready"));
+  });
+
   it("ignores a result after navigation away from a video", () => {
     const ui = createUi();
     let currentVideoId: string | undefined = "dQw4w9WgXcQ";

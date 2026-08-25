@@ -2,7 +2,7 @@ import type { LearningSubtitleResult } from "@fluent-frame/shared";
 import type { CoachUi } from "./ui.js";
 import { estimateGenerationDuration, formatDuration, writeGenerationRecord } from "./generationHistory.js";
 import { generationProgressMessage } from "./generationProgress.js";
-import type { ActiveLearningGeneration, LearningGenerationClient } from "./learningGenerationClient.js";
+import type { ActiveLearningGeneration, LearningGenerationClient, LearningGenerationResultMeta } from "./learningGenerationClient.js";
 
 type CacheProgress = {
   localResult: boolean;
@@ -107,6 +107,18 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
     deps.reconcilePlayerUi();
   }
 
+  function finishIncomplete(videoId: string, startedMs: number, result: LearningSubtitleResult, meta: LearningGenerationResultMeta): void {
+    stopGenerationProgress();
+    activeGeneration = undefined;
+    record(videoId, startedMs, "failed");
+    const detail = meta.fallbackReason ? `: ${meta.fallbackReason}` : "";
+    const message = meta.mode === "sourceFallback"
+      ? `Source subtitles only${detail}`
+      : `Partial subtitles saved${detail}`;
+    deps.ui.setResult(result, message);
+    deps.reconcilePlayerUi();
+  }
+
   function cacheCountsText(cache: CacheProgress): string {
     const local = cache.localResult ? 1 : 0;
     const partial = cache.partialResult ? 1 : 0;
@@ -165,8 +177,12 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
         deps.ui.setProgress(statusMessage(startedMs, estimate));
         deps.reconcilePlayerUi();
       },
-      onResult(result) {
+      onResult(result, meta) {
         if (!isStale(requestSequence, videoId)) {
+          if (meta?.mode === "partialFallback" || meta?.mode === "sourceFallback") {
+            finishIncomplete(videoId, startedMs, result, meta);
+            return;
+          }
           finishSuccess(videoId, startedMs, result);
         }
       },

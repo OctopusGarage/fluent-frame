@@ -127,7 +127,15 @@ export type HostResponse =
   | { id: string; ok: true; type: "health"; health: HostHealth }
   | { id: string; ok: true; type: "progress"; progress: HostProgress }
   | { id: string; ok: true; type: "partialResult"; result: LearningSubtitleResult; completedBatches: number; totalBatches: number }
-  | { id: string; ok: true; type: "result"; result: LearningSubtitleResult }
+  | {
+      id: string;
+      ok: true;
+      type: "result";
+      result: LearningSubtitleResult;
+      mode?: "cache" | "remoteCache" | "generated" | "partialFallback" | "sourceFallback";
+      cacheHit?: boolean;
+      fallbackReason?: string;
+    }
   | { id: string; ok: true; type: "personalNotes"; notes: PersonalNote[] }
   | { id: string; ok: true; type: "personalNotesSaved" }
   | { id: string; ok: true; type: "queue"; queue: QueueState }

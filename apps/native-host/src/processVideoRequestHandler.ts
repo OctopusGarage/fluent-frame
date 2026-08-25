@@ -134,7 +134,15 @@ export async function handleProcessVideoRequest(
       videoId: request.videoId,
       details: { mode: output.mode, fallbackReason: output.fallbackReason },
     });
-    return { id: request.id, ok: true, type: "result", result: output.result };
+    return {
+      id: request.id,
+      ok: true,
+      type: "result",
+      result: output.result,
+      mode: output.mode,
+      cacheHit: output.cacheHit,
+      ...(output.fallbackReason ? { fallbackReason: output.fallbackReason } : {}),
+    };
   } catch (error) {
     await logger.log({
       level: "error",

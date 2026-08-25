@@ -1,5 +1,11 @@
 import type { HostResponse, LearningSubtitleResult } from "@fluent-frame/shared";
 
+export type LearningGenerationResultMeta = {
+  mode?: Extract<HostResponse, { type: "result" }>["mode"];
+  cacheHit?: boolean;
+  fallbackReason?: string;
+};
+
 export type RuntimePort = {
   postMessage(message: unknown): void;
   disconnect(): void;
@@ -35,7 +41,7 @@ export type LearningGenerationHandlers = {
     };
   }): void;
   onPartialResult(result: LearningSubtitleResult, progress: { completedBatches: number; totalBatches: number }): void;
-  onResult(result: LearningSubtitleResult): void;
+  onResult(result: LearningSubtitleResult, meta?: LearningGenerationResultMeta): void;
   onError(message: string): void;
   onDisconnect(): void;
 };
@@ -77,7 +83,11 @@ function handleResponse(videoId: string, response: HostResponse | undefined, han
     return;
   }
   if (response.type === "result" && response.result.videoId === videoId) {
-    handlers.onResult(response.result);
+    handlers.onResult(response.result, {
+      ...(response.mode ? { mode: response.mode } : {}),
+      ...(response.cacheHit === undefined ? {} : { cacheHit: response.cacheHit }),
+      ...(response.fallbackReason ? { fallbackReason: response.fallbackReason } : {}),
+    });
   }
 }
 
