@@ -153,6 +153,14 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
     return normalized;
   }
 
+  async function writeJobs(jobs: QueueJob[]): Promise<QueueState> {
+    return writeState({ paused: false, jobs });
+  }
+
+  async function replaceJob(jobs: QueueJob[], jobIdToReplace: string, nextJob: QueueJob): Promise<QueueState> {
+    return writeJobs(jobs.map((candidate) => candidate.id === jobIdToReplace ? nextJob : candidate));
+  }
+
   async function updateJob(jobIdToUpdate: string, update: (job: QueueJob) => QueueJob): Promise<QueueJob> {
     return withLock(async () => {
       const state = await readState();
@@ -161,7 +169,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
         throw new Error("Queue job not found");
       }
       const nextJob = update(job);
-      await writeState({ paused: false, jobs: state.jobs.map((candidate) => candidate.id === jobIdToUpdate ? nextJob : candidate) });
+      await replaceJob(state.jobs, jobIdToUpdate, nextJob);
       return nextJob;
     });
   }
@@ -176,7 +184,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           const timestamp = now();
           const enriched = mergeQueueMetadata(existing, input, timestamp);
           if (enriched !== existing) {
-            await writeState({ paused: false, jobs: state.jobs.map((job) => job.id === id ? enriched : job) });
+            await replaceJob(state.jobs, id, enriched);
           }
           return { job: enriched, message: messageForStatus(enriched.status) };
         }
@@ -193,7 +201,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           updatedAt: timestamp,
           ...(input.cacheReady ? { finishedAt: timestamp } : {}),
         };
-        await writeState({ paused: false, jobs: [...state.jobs, nextJob] });
+        await writeJobs([...state.jobs, nextJob]);
         return { job: nextJob, message: input.cacheReady ? "Already ready" : "Queued" };
       });
     },
@@ -201,7 +209,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
     async remove(jobIdToRemove) {
       return withLock(async () => {
         const state = await readState();
-        return writeState({ paused: false, jobs: state.jobs.filter((job) => job.id !== jobIdToRemove) });
+        return writeJobs(state.jobs.filter((job) => job.id !== jobIdToRemove));
       });
     },
     async retry(jobIdToRetry) {
@@ -227,7 +235,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           completedBatches: 0,
           totalBatches: nextJob.totalBatches ?? 0,
         };
-        await writeState({ paused: false, jobs: state.jobs.map((job) => job.id === runningJob.id ? runningJob : job) });
+        await replaceJob(state.jobs, runningJob.id, runningJob);
         return runningJob;
       });
     },
@@ -239,7 +247,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           return undefined;
         }
         const touchedJob: QueueJob = { ...job, updatedAt: now() };
-        await writeState({ paused: false, jobs: state.jobs.map((candidate) => candidate.id === jobIdToTouch ? touchedJob : candidate) });
+        await replaceJob(state.jobs, jobIdToTouch, touchedJob);
         return touchedJob;
       });
     },
@@ -257,7 +265,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           completedBatches: progress.completedBatches,
           totalBatches: progress.totalBatches,
         };
-        await writeState({ paused: false, jobs: state.jobs.map((candidate) => candidate.id === jobIdToMark ? progressedJob : candidate) });
+        await replaceJob(state.jobs, jobIdToMark, progressedJob);
         return progressedJob;
       });
     },
@@ -277,13 +285,11 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
       await withLock(async () => {
         const state = await readState();
         const timestamp = now();
-        await writeState({
-          paused: false,
-          jobs: state.jobs.map((job) => job.status === "running"
-            && Date.parse(timestamp) - Date.parse(job.updatedAt) >= staleRunningMs
+        await writeJobs(state.jobs.map((job) => (
+          job.status === "running" && Date.parse(timestamp) - Date.parse(job.updatedAt) >= staleRunningMs
             ? queuedWithoutRunState(job, timestamp)
-            : job),
-        });
+            : job
+        )));
       });
     },
   };
