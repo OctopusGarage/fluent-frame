@@ -502,6 +502,61 @@ Second line.
     await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toEqual(second.result);
   });
 
+  it("reports cache summary with split count before resuming partial generation", async () => {
+    const captionText = Array.from({ length: 25 }, (_, index) => {
+      const id = index + 1;
+      const start = String(index).padStart(2, "0");
+      const end = String(index + 1).padStart(2, "0");
+      return `${id}\n00:00:${start},000 --> 00:00:${end},000\nLine ${id}.`;
+    }).join("\n\n");
+    await processVideo("dQw4w9WgXcQ", "en", {
+      cacheDir: dir,
+      downloadCaptions: async () => captionText,
+      runAgent: async (_captionText, options) => {
+        await options?.onBatch?.({
+          completedBatches: 1,
+          totalBatches: 2,
+          output: {
+            subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Line 1.", chinese: "第一句。", phraseIds: ["p1"] }],
+            phrases: [
+              {
+                id: "p1",
+                cueId: 1,
+                phrase: "first line",
+                meaningZh: "第一句",
+                explanationEn: "Opening sentence.",
+                difficulty: "basic" as const,
+              },
+            ],
+          },
+        });
+        throw new Error("Second batch failed");
+      },
+    });
+
+    const events: unknown[] = [];
+    await processVideo("dQw4w9WgXcQ", "en", {
+      cacheDir: dir,
+      downloadCaptions: async () => captionText,
+      runAgent: async () => {
+        throw new Error("Stop after cache summary");
+      },
+      onEvent: (event) => {
+        events.push(event);
+      },
+    });
+
+    expect(events[0]).toEqual({
+      type: "cacheStatus",
+      localResult: false,
+      remoteResult: false,
+      partialResult: true,
+      cachedBatches: 1,
+      totalBatches: 2,
+    });
+    expect(events[1]).toMatchObject({ type: "partialResult", completedBatches: 1, totalBatches: 2 });
+  });
+
   it("returns full source subtitles when the local agent fails or times out", async () => {
     const processed = await processVideo("dQw4w9WgXcQ", "en", {
       cacheDir: dir,

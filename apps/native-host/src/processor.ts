@@ -8,11 +8,20 @@ import {
   writeCachedPartialResult,
   writeCachedResult,
 } from "./cache.js";
+import { prepareCaptionBatches } from "./agentBatcher.js";
 import type { RemoteCacheProvider } from "./remoteCache.js";
 
 export type ProcessVideoMode = "cache" | "remoteCache" | "generated" | "partialFallback" | "sourceFallback";
 
 export type ProcessVideoEvent =
+  | {
+      type: "cacheStatus";
+      localResult: boolean;
+      remoteResult: boolean;
+      partialResult: boolean;
+      cachedBatches: number;
+      totalBatches?: number;
+    }
   | { type: "partialResult"; result: LearningSubtitleResult; completedBatches: number; totalBatches: number }
   | { type: "fallback"; mode: Extract<ProcessVideoMode, "partialFallback" | "sourceFallback">; reason: string };
 
@@ -86,6 +95,7 @@ export async function processVideo(
 ): Promise<ProcessVideoOutput> {
   const cached = await readCacheEntry(deps.cacheDir, videoId, captionLanguage);
   if (cached.status === "hit") {
+    await deps.onEvent?.({ type: "cacheStatus", localResult: true, remoteResult: false, partialResult: false, cachedBatches: 0 });
     return { result: cached.result, cacheHit: true, mode: "cache" };
   }
   if (cached.status === "corrupt") {
@@ -96,6 +106,7 @@ export async function processVideo(
 
   const remoteResult = await deps.remoteCache?.readResult(videoId, captionLanguage).catch(() => undefined);
   if (remoteResult) {
+    await deps.onEvent?.({ type: "cacheStatus", localResult: false, remoteResult: true, partialResult: false, cachedBatches: 0 });
     await writeCachedResult(deps.cacheDir, remoteResult);
     return { result: remoteResult, cacheHit: true, mode: "remoteCache" };
   }
@@ -110,6 +121,15 @@ export async function processVideo(
     await deps.writeCachedCaptions?.(videoId, captionLanguage, captionText).catch(() => undefined);
   }
   const cachedPartial = await readCachedPartialResult(deps.cacheDir, videoId, captionLanguage).catch(() => undefined);
+  const totalBatches = prepareCaptionBatches(captionText).length;
+  await deps.onEvent?.({
+    type: "cacheStatus",
+    localResult: false,
+    remoteResult: false,
+    partialResult: Boolean(cachedPartial),
+    cachedBatches: cachedPartial?.completedBatches ?? 0,
+    totalBatches,
+  });
   let lastSuccessfulAgentOutput: Awaited<ReturnType<AgentRunner>> | undefined;
   if (cachedPartial) {
     lastSuccessfulAgentOutput = cachedPartial.output;

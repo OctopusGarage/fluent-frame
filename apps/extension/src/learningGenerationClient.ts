@@ -21,7 +21,19 @@ export type ContentScriptRuntime = {
 };
 
 export type LearningGenerationHandlers = {
-  onProgress(progress: { message: string; completedBatches?: number; totalBatches?: number }): void;
+  onProgress(progress: {
+    message: string;
+    completedBatches?: number;
+    totalBatches?: number;
+    activeBatch?: number;
+    cache?: {
+      localResult: boolean;
+      remoteResult: boolean;
+      partialResult: boolean;
+      cachedBatches: number;
+      totalBatches?: number;
+    };
+  }): void;
   onPartialResult(result: LearningSubtitleResult, progress: { completedBatches: number; totalBatches: number }): void;
   onResult(result: LearningSubtitleResult): void;
   onError(message: string): void;
@@ -52,6 +64,8 @@ function handleResponse(videoId: string, response: HostResponse | undefined, han
       message: response.progress.message,
       ...(response.progress.completedBatches === undefined ? {} : { completedBatches: response.progress.completedBatches }),
       ...(response.progress.totalBatches === undefined ? {} : { totalBatches: response.progress.totalBatches }),
+      ...(response.progress.activeBatch === undefined ? {} : { activeBatch: response.progress.activeBatch }),
+      ...(response.progress.cache === undefined ? {} : { cache: response.progress.cache }),
     });
     return;
   }

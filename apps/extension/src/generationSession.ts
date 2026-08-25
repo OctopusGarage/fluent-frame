@@ -4,6 +4,14 @@ import { estimateGenerationDuration, formatDuration, writeGenerationRecord } fro
 import { generationProgressMessage } from "./generationProgress.js";
 import type { ActiveLearningGeneration, LearningGenerationClient } from "./learningGenerationClient.js";
 
+type CacheProgress = {
+  localResult: boolean;
+  remoteResult: boolean;
+  partialResult: boolean;
+  cachedBatches: number;
+  totalBatches?: number;
+};
+
 export type VideoLearningSession = {
   start(videoId: string): void;
   cancel(): void;
@@ -29,6 +37,8 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
         startedMs: number;
         request?: ActiveLearningGeneration;
         disconnecting: boolean;
+        statusPrefix?: string;
+        cache?: CacheProgress;
       }
     | undefined;
   let lastVideoId = deps.currentVideoId();
@@ -41,11 +51,16 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
     }
   }
 
+  function statusMessage(startedMs: number, estimate: string | undefined): string {
+    const suffix = generationProgressMessage(startedMs, estimate);
+    return activeGeneration?.statusPrefix ? `${activeGeneration.statusPrefix} · ${suffix}` : suffix;
+  }
+
   function startGenerationProgress(startedMs: number, estimate: string | undefined): void {
     stopGenerationProgress();
-    deps.ui.setProgress(generationProgressMessage(startedMs, estimate));
+    deps.ui.setProgress(statusMessage(startedMs, estimate));
     progressTimer = deps.win.setInterval(() => {
-      deps.ui.setProgress(generationProgressMessage(startedMs, estimate));
+      deps.ui.setProgress(statusMessage(startedMs, estimate));
     }, 1000) as unknown as number;
   }
 
@@ -92,23 +107,62 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
     deps.reconcilePlayerUi();
   }
 
+  function cacheCountsText(cache: CacheProgress): string {
+    const local = cache.localResult ? 1 : 0;
+    const partial = cache.partialResult ? 1 : 0;
+    const remote = cache.remoteResult ? 1 : 0;
+    return `cache: local ${local}, partial ${partial}, remote ${remote}`;
+  }
+
+  function cachedPartsText(cache: CacheProgress): string {
+    const total = cache.totalBatches ?? 0;
+    return total > 0 ? `cached parts ${cache.cachedBatches}/${total}` : `cached parts ${cache.cachedBatches}`;
+  }
+
+  function cacheProgressPrefix(cache: CacheProgress, totalBatches?: number): string {
+    const parts = totalBatches ?? cache.totalBatches;
+    const partsText = parts ? `parts ${parts}` : "parts checking";
+    return `${partsText} · ${cacheCountsText(cache)} · ${cachedPartsText(cache)}`;
+  }
+
+  function activePartPrefix(activeBatch: number | undefined, completedBatches: number | undefined, totalBatches: number | undefined, cache: CacheProgress | undefined): string | undefined {
+    if (!totalBatches) {
+      return undefined;
+    }
+    const currentPart = activeBatch ?? Math.min((completedBatches ?? 0) + 1, totalBatches);
+    const cacheText = cache ? ` · ${cachedPartsText(cache)}` : "";
+    return `Generating part ${currentPart}/${totalBatches}${cacheText}`;
+  }
+
   function startClientRequest(videoId: string, requestSequence: number, startedMs: number, estimate: string | undefined): void {
     const request = deps.generationClient.start(videoId, {
       onProgress(progress) {
         if (isStale(requestSequence, videoId)) {
           return;
         }
-        const batchText = progress.totalBatches
-          ? ` · batch ${progress.completedBatches ?? 0}/${progress.totalBatches}`
-          : "";
-        deps.ui.setProgress(`${progress.message}${batchText} · ${generationProgressMessage(startedMs, estimate)}`);
+        if (progress.cache) {
+          activeGeneration = activeGeneration ? { ...activeGeneration, cache: progress.cache } : activeGeneration;
+          activeGeneration = activeGeneration
+            ? { ...activeGeneration, statusPrefix: cacheProgressPrefix(progress.cache, progress.totalBatches) }
+            : activeGeneration;
+        } else {
+          const nextPrefix = activePartPrefix(progress.activeBatch, progress.completedBatches, progress.totalBatches, activeGeneration?.cache);
+          activeGeneration = activeGeneration
+            ? { ...activeGeneration, statusPrefix: nextPrefix ?? progress.message }
+            : activeGeneration;
+        }
+        deps.ui.setProgress(statusMessage(startedMs, estimate));
       },
       onPartialResult(result, progress) {
         if (isStale(requestSequence, videoId)) {
           return;
         }
         deps.ui.setResult(result, "Learning subtitles streaming...");
-        deps.ui.setProgress(`Batch ${progress.completedBatches} of ${progress.totalBatches} ready · ${generationProgressMessage(startedMs, estimate)}`);
+        const cacheText = activeGeneration?.cache ? ` · ${cachedPartsText(activeGeneration.cache)}` : "";
+        activeGeneration = activeGeneration
+          ? { ...activeGeneration, statusPrefix: `Part ${progress.completedBatches}/${progress.totalBatches} ready${cacheText}` }
+          : activeGeneration;
+        deps.ui.setProgress(statusMessage(startedMs, estimate));
         deps.reconcilePlayerUi();
       },
       onResult(result) {
@@ -137,7 +191,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
 
   function start(videoId: string): void {
     if (activeGeneration?.videoId === videoId) {
-      deps.ui.setProgress(`Already generating this video · ${generationProgressMessage(activeGeneration.startedMs, estimateGenerationDuration(deps.win))}`);
+      deps.ui.setProgress(`Already generating this video · ${statusMessage(activeGeneration.startedMs, estimateGenerationDuration(deps.win))}`);
       return;
     }
     cancel();

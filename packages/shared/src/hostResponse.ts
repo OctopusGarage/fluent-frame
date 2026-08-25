@@ -32,6 +32,29 @@ function parseRequiredNonNegativeNumber(value: unknown, message: string): number
   return parsed;
 }
 
+function parseProgressCache(value: unknown): HostProgress["cache"] {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !isObject(value) ||
+    typeof value.localResult !== "boolean" ||
+    typeof value.remoteResult !== "boolean" ||
+    typeof value.partialResult !== "boolean"
+  ) {
+    throw new Error("Invalid native host response");
+  }
+  const cachedBatches = parseRequiredNonNegativeNumber(value.cachedBatches, "Invalid native host response");
+  const totalBatches = parseOptionalNonNegativeNumber(value.totalBatches, "Invalid native host response");
+  return {
+    localResult: value.localResult,
+    remoteResult: value.remoteResult,
+    partialResult: value.partialResult,
+    cachedBatches,
+    ...(totalBatches !== undefined ? { totalBatches } : {}),
+  };
+}
+
 function parseRemoteCacheHealth(value: unknown): HostHealth["remoteCache"] {
   if (value === undefined) {
     return { enabled: false };
@@ -79,11 +102,15 @@ function parseProgress(value: unknown): HostProgress {
   }
   const completedBatches = parseOptionalNonNegativeNumber(value.completedBatches, "Invalid native host response");
   const totalBatches = parseOptionalNonNegativeNumber(value.totalBatches, "Invalid native host response");
+  const activeBatch = parseOptionalNonNegativeNumber(value.activeBatch, "Invalid native host response");
+  const cache = parseProgressCache(value.cache);
   return {
     stage: value.stage,
     message: value.message,
     ...(completedBatches !== undefined ? { completedBatches } : {}),
     ...(totalBatches !== undefined ? { totalBatches } : {}),
+    ...(activeBatch !== undefined ? { activeBatch } : {}),
+    ...(cache ? { cache } : {}),
   };
 }
 

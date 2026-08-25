@@ -418,6 +418,14 @@ describe("parseHostResponse", () => {
         message: "Generated batch 1 of 2",
         completedBatches: 1,
         totalBatches: 2,
+        activeBatch: 2,
+        cache: {
+          localResult: false,
+          remoteResult: false,
+          partialResult: true,
+          cachedBatches: 1,
+          totalBatches: 2,
+        },
       },
     })).toEqual({
       id: "progress1",
@@ -428,6 +436,14 @@ describe("parseHostResponse", () => {
         message: "Generated batch 1 of 2",
         completedBatches: 1,
         totalBatches: 2,
+        activeBatch: 2,
+        cache: {
+          localResult: false,
+          remoteResult: false,
+          partialResult: true,
+          cachedBatches: 1,
+          totalBatches: 2,
+        },
       },
     });
 

@@ -31,7 +31,7 @@ describe("processVideo events and provenance", () => {
         },
       });
 
-      expect(events).toEqual(["partialResult"]);
+      expect(events).toEqual(["cacheStatus", "partialResult"]);
       expect(output.mode).toBe("generated");
     } finally {
       await rm(cacheDir, { recursive: true, force: true });

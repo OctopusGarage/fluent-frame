@@ -99,6 +99,14 @@ export type HostProgress = {
   message: string;
   completedBatches?: number;
   totalBatches?: number;
+  activeBatch?: number;
+  cache?: {
+    localResult: boolean;
+    remoteResult: boolean;
+    partialResult: boolean;
+    cachedBatches: number;
+    totalBatches?: number;
+  };
 };
 
 export type HostRequest =

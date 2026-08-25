@@ -5,6 +5,21 @@ import { runVideoProcessingPipeline } from "./videoProcessingPipeline.js";
 
 type ProcessVideoRequest = Extract<HostRequest, { type: "processVideo" }>;
 
+function countFlag(value: boolean): 0 | 1 {
+  return value ? 1 : 0;
+}
+
+function cacheStatusMessage(event: {
+  localResult: boolean;
+  remoteResult: boolean;
+  partialResult: boolean;
+  cachedBatches: number;
+  totalBatches?: number;
+}): string {
+  const partsText = event.totalBatches ? `, cached parts ${event.cachedBatches}/${event.totalBatches}` : "";
+  return `Cache check: local result ${countFlag(event.localResult)}, partial checkpoint ${countFlag(event.partialResult)}, remote result ${countFlag(event.remoteResult)}${partsText}`;
+}
+
 export async function handleProcessVideoRequest(
   request: ProcessVideoRequest,
   context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
@@ -25,7 +40,7 @@ export async function handleProcessVideoRequest(
         id: request.id,
         ok: true,
         type: "progress",
-        progress: { stage: "download", message: "Downloading YouTube captions" },
+        progress: { stage: "cache", message: "Checking subtitle cache" },
       });
     }
     const output = await runVideoProcessingPipeline(config, {
@@ -34,7 +49,28 @@ export async function handleProcessVideoRequest(
       ...(request.stream
         ? {
             onEvent(event) {
+              if (event.type === "cacheStatus") {
+                emit?.({
+                  id: request.id,
+                  ok: true,
+                  type: "progress",
+                  progress: {
+                    stage: "cache",
+                    message: cacheStatusMessage(event),
+                    ...(event.totalBatches ? { totalBatches: event.totalBatches } : {}),
+                    cache: {
+                      localResult: event.localResult,
+                      remoteResult: event.remoteResult,
+                      partialResult: event.partialResult,
+                      cachedBatches: event.cachedBatches,
+                      ...(event.totalBatches ? { totalBatches: event.totalBatches } : {}),
+                    },
+                  },
+                });
+                return;
+              }
               if (event.type === "partialResult") {
+                const activeBatch = event.completedBatches < event.totalBatches ? event.completedBatches + 1 : event.totalBatches;
                 void logger.log({
                   level: "info",
                   component: "processor",
@@ -50,9 +86,10 @@ export async function handleProcessVideoRequest(
                   type: "progress",
                   progress: {
                     stage: "agent",
-                    message: `Generated batch ${event.completedBatches} of ${event.totalBatches}`,
+                    message: `Part ${event.completedBatches} of ${event.totalBatches} ready`,
                     completedBatches: event.completedBatches,
                     totalBatches: event.totalBatches,
+                    activeBatch,
                   },
                 });
                 emit?.({

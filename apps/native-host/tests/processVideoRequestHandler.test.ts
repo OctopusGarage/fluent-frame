@@ -46,6 +46,14 @@ describe("handleProcessVideoRequest", () => {
     const logger: Logger = { log: vi.fn(async () => undefined) };
     const emitted: HostResponse[] = [];
     runVideoProcessingPipeline.mockImplementation(async (_config: HostConfig, options: { onEvent?: (event: unknown) => void }) => {
+      options.onEvent?.({
+        type: "cacheStatus",
+        localResult: false,
+        remoteResult: false,
+        partialResult: true,
+        cachedBatches: 1,
+        totalBatches: 2,
+      });
       options.onEvent?.({ type: "partialResult", result, completedBatches: 1, totalBatches: 2 });
       options.onEvent?.({ type: "fallback", mode: "partialFallback", reason: "agent exited early" });
       return { mode: "generated", result };
@@ -63,7 +71,24 @@ describe("handleProcessVideoRequest", () => {
         id: "process1",
         ok: true,
         type: "progress",
-        progress: { stage: "download", message: "Downloading YouTube captions" },
+        progress: { stage: "cache", message: "Checking subtitle cache" },
+      },
+      {
+        id: "process1",
+        ok: true,
+        type: "progress",
+        progress: {
+          stage: "cache",
+          message: "Cache check: local result 0, partial checkpoint 1, remote result 0, cached parts 1/2",
+          totalBatches: 2,
+          cache: {
+            localResult: false,
+            remoteResult: false,
+            partialResult: true,
+            cachedBatches: 1,
+            totalBatches: 2,
+          },
+        },
       },
       {
         id: "process1",
@@ -71,9 +96,10 @@ describe("handleProcessVideoRequest", () => {
         type: "progress",
         progress: {
           stage: "agent",
-          message: "Generated batch 1 of 2",
+          message: "Part 1 of 2 ready",
           completedBatches: 1,
           totalBatches: 2,
+          activeBatch: 2,
         },
       },
       { id: "process1", ok: true, type: "partialResult", result, completedBatches: 1, totalBatches: 2 },
@@ -117,7 +143,7 @@ describe("handleProcessVideoRequest", () => {
         id: "process2",
         ok: true,
         type: "progress",
-        progress: { stage: "download", message: "Downloading YouTube captions" },
+        progress: { stage: "cache", message: "Checking subtitle cache" },
       },
     ]);
     expect(logger.log).toHaveBeenCalledWith(expect.objectContaining({ event: "generation.failed" }));

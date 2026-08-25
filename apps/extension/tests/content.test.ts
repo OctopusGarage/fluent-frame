@@ -517,6 +517,75 @@ describe("bootstrapContentScript", () => {
     });
   });
 
+  it("shows cache counts, split count, and active part while generating", () => {
+    const ports: MockRuntimePort[] = [];
+    const runtime = {
+      lastError: undefined,
+      connect: vi.fn((options?: { name?: string }) => {
+        const port = createRuntimePort(options?.name ?? "");
+        ports.push(port);
+        return port;
+      }),
+      sendMessage: vi.fn((_message: unknown, nextCallback: (response: unknown) => void) => {
+        if ((_message as { type?: string }).type === "getPersonalNotes") {
+          nextCallback({ id: "notes-1", ok: true, type: "personalNotes", notes: [] });
+        }
+      }),
+    } satisfies ContentScriptRuntime;
+    const setInterval = vi.spyOn(window, "setInterval").mockImplementation(() => 1 as unknown as NodeJS.Timeout);
+    const clearInterval = vi.spyOn(window, "clearInterval").mockImplementation(() => undefined);
+    const mutationObserver = window.MutationObserver;
+    Object.defineProperty(window, "MutationObserver", {
+      configurable: true,
+      value: undefined,
+    });
+
+    bootstrapContentScript(document, window, runtime);
+    document.getElementById("ff-generate")?.click();
+    ports[0]?.emitMessage({
+      id: "stream-1",
+      ok: true,
+      type: "progress",
+      progress: {
+        stage: "cache",
+        message: "Cache check",
+        totalBatches: 14,
+        cache: {
+          localResult: false,
+          remoteResult: false,
+          partialResult: true,
+          cachedBatches: 2,
+          totalBatches: 14,
+        },
+      },
+    });
+    expect(document.getElementById("ff-progress")?.textContent).toContain("parts 14");
+    expect(document.getElementById("ff-progress")?.textContent).toContain("cache: local 0, partial 1, remote 0");
+    expect(document.getElementById("ff-progress")?.textContent).toContain("cached parts 2/14");
+
+    ports[0]?.emitMessage({
+      id: "stream-1",
+      ok: true,
+      type: "progress",
+      progress: {
+        stage: "agent",
+        message: "Generating part 3 of 14",
+        completedBatches: 2,
+        totalBatches: 14,
+        activeBatch: 3,
+      },
+    });
+    expect(document.getElementById("ff-progress")?.textContent).toContain("Generating part 3/14");
+    expect(document.getElementById("ff-progress")?.textContent).toContain("cached parts 2/14");
+
+    setInterval.mockRestore();
+    clearInterval.mockRestore();
+    Object.defineProperty(window, "MutationObserver", {
+      configurable: true,
+      value: mutationObserver,
+    });
+  });
+
   it("keeps repeated generate clicks idempotent while the same video is still streaming", () => {
     const ports: MockRuntimePort[] = [];
     const runtime = {
@@ -595,7 +664,7 @@ describe("bootstrapContentScript", () => {
     syncLoop?.();
 
     expect(document.body.textContent).toContain("Nice pass.");
-    expect(document.getElementById("ff-progress")?.textContent).toContain("Batch 1 of 2 ready");
+    expect(document.getElementById("ff-progress")?.textContent).toContain("Part 1/2 ready");
 
     window.history.replaceState({}, "", "/watch?v=o3RPPjzciqo");
     navigationLoop?.();
