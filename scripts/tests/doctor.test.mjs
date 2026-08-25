@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateNativeHostRegistration, parseWrapperExec } from "../doctor.mjs";
+import { evaluateNativeHostRegistration, parseWrapperExec, resolveTokenState } from "../doctor.mjs";
 
 test("parseWrapperExec extracts the node binary and host target from the wrapper", () => {
   assert.deepEqual(
@@ -105,4 +105,22 @@ exec "/usr/local/bin/node" "/Users/example/.fluent-frame/host/native-host/index.
       detail: "/Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md",
     },
   });
+});
+
+test("resolveTokenState accepts a token from launchctl when the shell env is empty", async () => {
+  const result = await resolveTokenState("FLUENT_FRAME_GITHUB_TOKEN", {
+    env: {},
+    launchctlEnv: async (name) => name === "FLUENT_FRAME_GITHUB_TOKEN" ? "configured" : undefined,
+  });
+
+  assert.deepEqual(result, { configured: true, source: "launchctl" });
+});
+
+test("resolveTokenState prefers the shell env over launchctl", async () => {
+  const result = await resolveTokenState("FLUENT_FRAME_GITHUB_TOKEN", {
+    env: { FLUENT_FRAME_GITHUB_TOKEN: "configured" },
+    launchctlEnv: async () => undefined,
+  });
+
+  assert.deepEqual(result, { configured: true, source: "shell" });
 });

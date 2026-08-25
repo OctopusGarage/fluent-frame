@@ -71,4 +71,19 @@ setInterval(() => {}, 1000);
       "Timed out while downloading captions",
     );
   });
+
+  it("reports YouTube subtitle rate limits with a concise message", async () => {
+    const ytDlpPath = await writeExecutable(
+      "rate-limited-yt-dlp.mjs",
+      `#!/usr/bin/env node
+console.error("WARNING: The extractor specified to use impersonation for this download, but no impersonate target is available.");
+console.error("ERROR: Unable to download video subtitles for 'en': HTTP Error 429: Too Many Requests");
+process.exit(1);
+`,
+    );
+
+    await expect(downloadCaptions("dQw4w9WgXcQ", "en", ytDlpPath)).rejects.toThrow(
+      "YouTube is rate-limiting subtitle downloads. Try again later.",
+    );
+  });
 });

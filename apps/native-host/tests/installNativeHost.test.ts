@@ -70,10 +70,23 @@ describe("native host installer", () => {
   it("rejects managed native host runtimes missing prompt assets", () => {
     expect(() =>
       assertManagedHostRuntime("/Users/example/.fluent-frame/host/native-host", (path) =>
-        path === "/Users/example/.fluent-frame/host/native-host/index.js"
+        path === "/Users/example/.fluent-frame/host/native-host/index.js" ||
+        path === "/Users/example/.fluent-frame/host/native-host/node_modules/@fluent-frame/shared/package.json" ||
+        path === "/Users/example/.fluent-frame/host/native-host/node_modules/@fluent-frame/shared/dist/index.js"
       ),
     ).toThrow(
       "Managed native host runtime is incomplete: /Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md",
+    );
+  });
+
+  it("rejects managed native host runtimes missing the shared package", () => {
+    expect(() =>
+      assertManagedHostRuntime("/Users/example/.fluent-frame/host/native-host", (path) =>
+        path === "/Users/example/.fluent-frame/host/native-host/index.js" ||
+        path === "/Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md"
+      ),
+    ).toThrow(
+      "Managed native host runtime is incomplete: /Users/example/.fluent-frame/host/native-host/node_modules/@fluent-frame/shared/package.json, /Users/example/.fluent-frame/host/native-host/node_modules/@fluent-frame/shared/dist/index.js",
     );
   });
 
@@ -81,7 +94,9 @@ describe("native host installer", () => {
     expect(() =>
       assertManagedHostRuntime("/Users/example/.fluent-frame/host/native-host", (path) =>
         path === "/Users/example/.fluent-frame/host/native-host/index.js" ||
-        path === "/Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md"
+        path === "/Users/example/.fluent-frame/host/native-host/prompts/youtube-learning-subtitles.md" ||
+        path === "/Users/example/.fluent-frame/host/native-host/node_modules/@fluent-frame/shared/package.json" ||
+        path === "/Users/example/.fluent-frame/host/native-host/node_modules/@fluent-frame/shared/dist/index.js"
       ),
     ).not.toThrow();
   });
@@ -90,6 +105,13 @@ describe("native host installer", () => {
     const nodeBinDir = process.execPath.slice(0, process.execPath.lastIndexOf("/"));
     expect(buildNativeHostWrapper("/repo/apps/native-host/dist/index.js")).toBe(`#\\!/bin/sh
 export PATH='${nodeBinDir}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH'
+if command -v launchctl >/dev/null 2>&1; then
+  FLUENT_FRAME_GITHUB_TOKEN_VALUE="$(launchctl getenv FLUENT_FRAME_GITHUB_TOKEN 2>/dev/null || true)"
+  if [ -n "$FLUENT_FRAME_GITHUB_TOKEN_VALUE" ]; then
+    export FLUENT_FRAME_GITHUB_TOKEN="$FLUENT_FRAME_GITHUB_TOKEN_VALUE"
+  fi
+  unset FLUENT_FRAME_GITHUB_TOKEN_VALUE
+fi
 exec "${process.execPath}" "/repo/apps/native-host/dist/index.js"
 `.replace("\\!", "!"));
   });
@@ -109,6 +131,13 @@ export FF_AGENT='claude'
 export FF_YTDLP_PATH='/opt/homebrew/bin/yt-dlp'
 export FF_CODEX_PATH='/Users/example/bin/codex'\\''s cli'
 export FF_CLAUDE_PATH='/Users/example/bin/claude'
+if command -v launchctl >/dev/null 2>&1; then
+  FLUENT_FRAME_GITHUB_TOKEN_VALUE="$(launchctl getenv FLUENT_FRAME_GITHUB_TOKEN 2>/dev/null || true)"
+  if [ -n "$FLUENT_FRAME_GITHUB_TOKEN_VALUE" ]; then
+    export FLUENT_FRAME_GITHUB_TOKEN="$FLUENT_FRAME_GITHUB_TOKEN_VALUE"
+  fi
+  unset FLUENT_FRAME_GITHUB_TOKEN_VALUE
+fi
 exec "${process.execPath}" "/repo/apps/native-host/dist/index.js"
 `.replace("\\!", "!"));
   });

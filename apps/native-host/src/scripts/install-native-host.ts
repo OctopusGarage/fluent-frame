@@ -65,7 +65,14 @@ export function buildNativeHostWrapper(config: NativeHostWrapperConfig | string)
     .join("\n");
   const exportBlock = exports ? `${exports}\n` : "";
   return `#!/bin/sh
-${exportBlock}exec "${process.execPath}" "${wrapperConfig.hostPath}"
+${exportBlock}if command -v launchctl >/dev/null 2>&1; then
+  FLUENT_FRAME_GITHUB_TOKEN_VALUE="$(launchctl getenv FLUENT_FRAME_GITHUB_TOKEN 2>/dev/null || true)"
+  if [ -n "$FLUENT_FRAME_GITHUB_TOKEN_VALUE" ]; then
+    export FLUENT_FRAME_GITHUB_TOKEN="$FLUENT_FRAME_GITHUB_TOKEN_VALUE"
+  fi
+  unset FLUENT_FRAME_GITHUB_TOKEN_VALUE
+fi
+exec "${process.execPath}" "${wrapperConfig.hostPath}"
 `;
 }
 
@@ -163,6 +170,8 @@ export function assertManagedHostRuntime(managedHostDir: string, exists: (path: 
   const requiredPaths = [
     join(managedHostDir, "index.js"),
     join(managedHostDir, "prompts", "youtube-learning-subtitles.md"),
+    join(managedHostDir, "node_modules", "@fluent-frame", "shared", "package.json"),
+    join(managedHostDir, "node_modules", "@fluent-frame", "shared", "dist", "index.js"),
   ];
   const missingPaths = requiredPaths.filter((path) => !exists(path));
   if (missingPaths.length > 0) {

@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import {
   configPath,
   extensionDistPath,
@@ -13,6 +15,7 @@ import {
   resolveCommand,
 } from "./local-common.mjs";
 
+const execFileAsync = promisify(execFile);
 export const managedNativeHostPath = join(homedir(), ".fluent-frame", "host", "native-host", "index.js");
 export const managedNativeHostPromptPath = join(
   dirname(managedNativeHostPath),
@@ -26,18 +29,44 @@ function ok(label, passed, detail = "") {
   return passed;
 }
 
-function remoteCacheSummary(config) {
+async function readLaunchctlEnv(name) {
+  if (process.platform !== "darwin") {
+    return undefined;
+  }
+  try {
+    const { stdout } = await execFileAsync("/bin/launchctl", ["getenv", name]);
+    const value = stdout.trim();
+    return value ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function resolveTokenState(tokenEnv, { env = process.env, launchctlEnv = readLaunchctlEnv } = {}) {
+  if (env[tokenEnv]) {
+    return { configured: true, source: "shell" };
+  }
+  const launchctlValue = await launchctlEnv(tokenEnv);
+  if (launchctlValue) {
+    return { configured: true, source: "launchctl" };
+  }
+  return { configured: false, source: "missing" };
+}
+
+async function remoteCacheSummary(config) {
   const remoteCache = config.remoteCache;
   if (!remoteCache || remoteCache.enabled !== true || remoteCache.provider !== "github") {
     return { enabled: false };
   }
   const tokenEnv = typeof remoteCache.tokenEnv === "string" ? remoteCache.tokenEnv : undefined;
+  const tokenState = tokenEnv ? await resolveTokenState(tokenEnv) : undefined;
   return {
     enabled: true,
     detail: `${remoteCache.owner}/${remoteCache.repo}@${remoteCache.branch ?? "main"}:${remoteCache.basePath ?? "data/youtube"}`,
     writeEnabled: remoteCache.writeEnabled === true,
     tokenEnv,
-    tokenConfigured: tokenEnv ? Boolean(process.env[tokenEnv]) : false,
+    tokenConfigured: tokenState?.configured ?? false,
+    tokenSource: tokenState?.source,
   };
 }
 
@@ -151,7 +180,7 @@ async function main() {
   ok("selected agent", agentOk, selectedAgent);
 
   logStep("Remote cache");
-  const remoteCache = remoteCacheSummary(config);
+  const remoteCache = await remoteCacheSummary(config);
   if (!remoteCache.enabled) {
     ok("GitHub remote cache", true, "disabled");
   } else {
@@ -159,7 +188,7 @@ async function main() {
     ok("GitHub remote writes", remoteCache.writeEnabled, remoteCache.writeEnabled ? "enabled" : "disabled");
     if (remoteCache.tokenEnv) {
       ok("GitHub token env", remoteCache.tokenConfigured, remoteCache.tokenConfigured
-        ? `${remoteCache.tokenEnv} is set`
+        ? `${remoteCache.tokenEnv} is set via ${remoteCache.tokenSource === "launchctl" ? "launchctl" : "this shell"}`
         : `${remoteCache.tokenEnv} is not set in this shell`);
     } else {
       ok("GitHub token env", false, "not configured; public read-only cache only");

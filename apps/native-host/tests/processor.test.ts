@@ -421,6 +421,38 @@ Source only.
     await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
   });
 
+  it("reuses cached captions after agent failure so retries do not download subtitles again", async () => {
+    let downloads = 0;
+    let agentRuns = 0;
+    let cachedCaptionText: string | undefined;
+    const deps = {
+      cacheDir: dir,
+      readCachedCaptions: async () => cachedCaptionText,
+      writeCachedCaptions: async (_videoId: string, _captionLanguage: string, captionText: string) => {
+        cachedCaptionText = captionText;
+      },
+      downloadCaptions: async () => {
+        downloads += 1;
+        return `1
+00:00:00,000 --> 00:00:01,000
+Source one.
+`;
+      },
+      runAgent: async () => {
+        agentRuns += 1;
+        throw new Error("Codex timed out after 120 seconds");
+      },
+    };
+
+    const first = await processVideo("dQw4w9WgXcQ", "en", deps);
+    const second = await processVideo("dQw4w9WgXcQ", "en", deps);
+
+    expect(first.mode).toBe("sourceFallback");
+    expect(second.mode).toBe("sourceFallback");
+    expect(downloads).toBe(1);
+    expect(agentRuns).toBe(2);
+  });
+
   it("hydrates local cache from a remote cache hit without downloading captions or running the agent", async () => {
     const remoteResult = {
       videoId: "dQw4w9WgXcQ",

@@ -12,11 +12,13 @@ export type ProcessVideoEvent =
 export type ProcessVideoDeps = {
   cacheDir: string;
   remoteCache?: RemoteCacheProvider;
+  readCachedCaptions?: (videoId: string, captionLanguage: string) => Promise<string | undefined>;
+  writeCachedCaptions?: (videoId: string, captionLanguage: string, captionText: string) => Promise<void>;
   downloadCaptions: (videoId: string, captionLanguage: string) => Promise<string>;
   runAgent: AgentRunner;
   onEvent?: (event: ProcessVideoEvent) => Promise<void> | void;
   onPartialResult?: (result: LearningSubtitleResult, progress: AgentBatchProgress) => Promise<void> | void;
-  backfillRemoteCache?: () => Promise<unknown>;
+  backfillRemoteCache?: (result: LearningSubtitleResult) => Promise<unknown>;
 };
 
 export type ProcessVideoOutput = {
@@ -91,10 +93,14 @@ export async function processVideo(
     return { result: remoteResult, cacheHit: true, mode: "remoteCache" };
   }
 
-  const captionText = await deps.downloadCaptions(videoId, captionLanguage);
+  const cachedCaptionText = await deps.readCachedCaptions?.(videoId, captionLanguage).catch(() => undefined);
+  const captionText = cachedCaptionText ?? await deps.downloadCaptions(videoId, captionLanguage);
   const fallbackSubtitles = sourceSubtitles(captionText);
   if (fallbackSubtitles.length === 0) {
     throw new Error("No subtitles parsed from downloaded captions");
+  }
+  if (!cachedCaptionText) {
+    await deps.writeCachedCaptions?.(videoId, captionLanguage, captionText).catch(() => undefined);
   }
   let lastSuccessfulAgentOutput: Awaited<ReturnType<AgentRunner>> | undefined;
   const agentOutput = await deps.runAgent(captionText, {
@@ -132,7 +138,7 @@ export async function processVideo(
   if (successfulAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
     await deps.remoteCache?.writeResult(result).catch(() => undefined);
-    await deps.backfillRemoteCache?.().catch(() => undefined);
+    await deps.backfillRemoteCache?.(result).catch(() => undefined);
   }
   const mode: ProcessVideoMode = successfulAgentOutput ? "generated" : bestAgentOutput ? "partialFallback" : "sourceFallback";
   if (agentFailure && mode !== "generated") {

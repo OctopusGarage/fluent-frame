@@ -9,6 +9,13 @@ type CaptionDownloadOptions = {
   timeoutMs?: number;
 };
 
+function captionDownloadErrorMessage(stderr: string, command: string, code: number | null): string {
+  if (/HTTP Error 429|Too Many Requests/i.test(stderr)) {
+    return "YouTube is rate-limiting subtitle downloads. Try again later.";
+  }
+  return stderr.trim() || `${command} exited with ${code}`;
+}
+
 function run(command: string, args: string[], cwd: string, options: CaptionDownloadOptions = {}): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -43,7 +50,7 @@ function run(command: string, args: string[], cwd: string, options: CaptionDownl
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(stderr.trim() || `${command} exited with ${code}`));
+        reject(new Error(captionDownloadErrorMessage(stderr, command, code)));
       }
     });
   });
