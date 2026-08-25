@@ -68,9 +68,15 @@ function runningJobText(job: QueueJob): string {
 
 export function createPopupQueue(deps: PopupQueueDeps) {
   async function refresh(): Promise<void> {
-    const response = (await deps.runtime.sendMessage({ type: "getQueue" })) as HostResponse;
-    if (response?.ok && response.type === "queue") {
-      render(response.queue);
+    try {
+      const response = (await deps.runtime.sendMessage({ type: "getQueue" })) as HostResponse;
+      if (response?.ok && response.type === "queue") {
+        render(response.queue);
+        return;
+      }
+      deps.setStatus(response && !response.ok ? response.message : "Queue refresh failed.");
+    } catch (error) {
+      deps.setStatus(error instanceof Error ? error.message : "Queue refresh failed.");
     }
   }
 

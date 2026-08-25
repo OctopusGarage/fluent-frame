@@ -298,6 +298,11 @@ describe("parseQueueJob", () => {
     expect(() => parseQueueJob({ ...job, totalBatches: 1.5 })).toThrow("Invalid queue job");
   });
 
+  it("rejects invalid queue timestamps before they can block stale job recovery", () => {
+    expect(() => parseQueueJob({ ...job, updatedAt: "not-a-date" })).toThrow("Invalid queue job");
+    expect(() => parseQueueJob({ ...job, startedAt: "still-not-a-date" })).toThrow("Invalid queue job");
+  });
+
   it("rejects invalid running job IDs before exposing queue state", () => {
     expect(() => parseQueueState({
       paused: false,

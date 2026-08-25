@@ -122,4 +122,19 @@ describe("createPopupQueue", () => {
     expect(setStatus).toHaveBeenCalledWith("Extension context invalidated");
     expect(sendMessage).toHaveBeenCalledOnce();
   });
+
+  it("surfaces queue refresh failures instead of leaving stale queue state silent", async () => {
+    const sendMessage = vi.fn(async () => ({ id: "q1", ok: false, type: "error", message: "Native host unavailable" }));
+    const setStatus = vi.fn();
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage },
+      openTab: vi.fn(),
+      setStatus,
+    });
+
+    await popupQueue.refresh();
+
+    expect(setStatus).toHaveBeenCalledWith("Native host unavailable");
+  });
 });
