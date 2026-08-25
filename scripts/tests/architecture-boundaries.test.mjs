@@ -179,6 +179,27 @@ function findNamedExports(source, names) {
   return exportedNames;
 }
 
+function findExportedDeclarationNames(source) {
+  const exportedNames = [];
+
+  for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
+    for (const exportEntry of match[1].split(",")) {
+      const [localName, exportedAlias] = exportEntry
+        .trim()
+        .replace(/^type\s+/, "")
+        .split(/\s+as\s+/)
+        .map((part) => part.trim());
+      exportedNames.push(exportedAlias || localName);
+    }
+  }
+
+  for (const match of source.matchAll(/export\s+(?:async\s+)?(?:function|class|const|let|var|type|interface)\s+([A-Za-z_$][\w$]*)/g)) {
+    exportedNames.push(match[1]);
+  }
+
+  return exportedNames.sort();
+}
+
 test("workspace package source and tests keep documented architecture boundaries", () => {
   const violations = [];
 
@@ -267,6 +288,13 @@ test("native host request handlers do not re-export worker or processor internal
   ];
 
   assert.deepEqual(forbiddenReExports, []);
+});
+
+test("native host parsed-request dispatcher exposes only the router boundary", () => {
+  const hostRequestHandlersPath = resolve(repoRoot, "apps/native-host/src/hostRequestHandlers.ts");
+  const source = readFileSync(hostRequestHandlersPath, "utf8");
+
+  assert.deepEqual(findExportedDeclarationNames(source), ["handleParsedRequest"]);
 });
 
 test("extension runtime entrypoint does not re-export request or native-client internals", () => {
