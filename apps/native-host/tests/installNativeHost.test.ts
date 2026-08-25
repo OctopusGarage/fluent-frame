@@ -22,6 +22,10 @@ describe("native host installer", () => {
     ]);
   });
 
+  it("rejects invalid explicit extension IDs before writing a native host origin", () => {
+    expect(() => resolveAllowedOrigins(undefined, "not-a-chrome-extension-id")).toThrow("Invalid Chrome extension ID");
+  });
+
   it("resolves extension ID from CLI args before env", () => {
     expect(resolveExtensionId(["--extension-id", "cliabcdefghijklmnopabcdefghijkl"], { FF_EXTENSION_ID: "env" })).toBe(
       "cliabcdefghijklmnopabcdefghijkl",
