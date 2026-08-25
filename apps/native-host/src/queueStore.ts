@@ -213,8 +213,10 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
       });
     },
     async retry(jobIdToRetry) {
-      const job = await updateJob(jobIdToRetry, (current) => queuedWithoutRunState(current, now()));
-      return { job, message: "Queued" };
+      const job = await updateJob(jobIdToRetry, (current) => (
+        current.status === "failed" ? queuedWithoutRunState(current, now()) : current
+      ));
+      return { job, message: job.status === "queued" ? "Queued" : messageForStatus(job.status) };
     },
     async claimNext() {
       return withLock(async () => {
