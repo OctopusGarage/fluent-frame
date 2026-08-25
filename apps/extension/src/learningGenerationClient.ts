@@ -15,7 +15,7 @@ export type ContentScriptRuntime = {
   lastError: chrome.runtime.LastError | undefined;
   connect?(connectInfo?: { name?: string }): RuntimePort;
   onMessage?: {
-    addListener(listener: (message: unknown) => void): void;
+    addListener(listener: (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => void | boolean): void;
   };
   sendMessage(message: unknown, callback: (response: HostResponse | undefined) => void): void;
 };

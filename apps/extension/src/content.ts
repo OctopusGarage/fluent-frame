@@ -206,17 +206,24 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   }
 
   function bindPopupMessageListener(): void {
-    runtime.onMessage?.addListener((message: unknown) => {
+    runtime.onMessage?.addListener((message: unknown, _sender: unknown, sendResponse: (response: unknown) => void) => {
+      const acknowledge = (response: unknown): void => {
+        if (typeof sendResponse === "function") {
+          sendResponse(response);
+        }
+      };
       if (!message || typeof message !== "object") {
         return;
       }
       if ((message as { type?: unknown }).type === "popupTogglePanel") {
         ui.togglePanel();
-        return;
+        acknowledge({ ok: true });
+        return true;
       }
       if ((message as { type?: unknown }).type === "popupResetUi") {
         ui.resetUiState();
-        return;
+        acknowledge({ ok: true });
+        return true;
       }
       if ((message as { type?: unknown }).type !== "popupGenerate") {
         return;
@@ -224,9 +231,12 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
       const videoId = page.currentVideoId();
       if (!videoId) {
         ui.setError("Open a YouTube video first.");
-        return;
+        acknowledge({ ok: false, message: "Open a YouTube video first." });
+        return true;
       }
       session.start(videoId);
+      acknowledge({ ok: true });
+      return true;
     });
   }
 

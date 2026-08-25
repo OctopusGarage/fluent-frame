@@ -5,35 +5,47 @@ export type PopupTabsDeps = {
   setStatus(message: string): void;
 };
 
+function tabMessageErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  return /Receiving end does not exist|Could not establish connection|Extension context invalidated/i.test(message)
+    ? "Refresh the YouTube tab, then try again."
+    : "Could not reach the YouTube page.";
+}
+
 export function createPopupTabs(deps: PopupTabsDeps) {
   async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
     const [tab] = await deps.tabs.query({ active: true, currentWindow: true });
     return tab;
   }
 
-  async function sendActiveTabMessage(message: unknown, successMessage: string): Promise<void> {
+  async function sendActiveTabMessage(message: unknown, pendingMessage: string, successMessage: string): Promise<void> {
     try {
       const tab = await activeTab();
       if (!tab?.id) {
         deps.setStatus("No active tab.");
         return;
       }
+      deps.setStatus(pendingMessage);
       await deps.tabs.sendMessage(tab.id, message);
       deps.setStatus(successMessage);
-    } catch {
-      deps.setStatus("Could not reach the YouTube page.");
+    } catch (error) {
+      deps.setStatus(tabMessageErrorMessage(error));
     }
   }
 
   return {
     generate() {
-      return sendActiveTabMessage({ type: "popupGenerate" }, "Request sent to YouTube page.");
+      return sendActiveTabMessage(
+        { type: "popupGenerate" },
+        "Starting generation on this YouTube tab...",
+        "Generation started on the YouTube page.",
+      );
     },
     togglePane() {
-      return sendActiveTabMessage({ type: "popupTogglePanel" }, "Page pane toggled.");
+      return sendActiveTabMessage({ type: "popupTogglePanel" }, "Toggling page pane...", "Page pane toggled.");
     },
     resetPane() {
-      return sendActiveTabMessage({ type: "popupResetUi" }, "Page pane layout reset.");
+      return sendActiveTabMessage({ type: "popupResetUi" }, "Resetting page pane...", "Page pane layout reset.");
     },
     async enqueueCurrent(
       enqueue: (input: { videoId: string; url: string; title?: string }) => Promise<void>,

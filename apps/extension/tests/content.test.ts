@@ -152,25 +152,28 @@ describe("bootstrapContentScript", () => {
   });
 
   it("handles popup generation once through the idempotent bootstrap", () => {
-    let listener: ((message: unknown) => void) | undefined;
+    let listener: ((message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => void | boolean) | undefined;
     const runtime = {
       lastError: undefined,
       sendMessage: vi.fn((_message: unknown, callback: (response: unknown) => void) => {
         callback({ id: "request-1", ok: true, type: "result", result });
       }),
       onMessage: {
-        addListener: vi.fn((nextListener: (message: unknown) => void) => {
+        addListener: vi.fn((nextListener: (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => void | boolean) => {
           listener = nextListener;
         }),
       },
     };
     const win = { setInterval: vi.fn() } as unknown as Window;
+    const sendResponse = vi.fn();
 
     bootstrapContentScript(document, win, runtime as unknown as ContentScriptRuntime);
     bootstrapContentScript(document, win, runtime as unknown as ContentScriptRuntime);
-    listener?.({ type: "popupGenerate" });
+    const handled = listener?.({ type: "popupGenerate" }, {}, sendResponse);
 
     expect(runtime.onMessage.addListener).toHaveBeenCalledOnce();
+    expect(handled).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
     expect(processVideoMessages(runtime)).toHaveLength(1);
     expect(runtime.sendMessage).toHaveBeenCalledWith(
       { type: "processCurrentVideo", videoId: "dQw4w9WgXcQ" },
