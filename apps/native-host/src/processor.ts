@@ -16,6 +16,7 @@ export type ProcessVideoDeps = {
   runAgent: AgentRunner;
   onEvent?: (event: ProcessVideoEvent) => Promise<void> | void;
   onPartialResult?: (result: LearningSubtitleResult, progress: AgentBatchProgress) => Promise<void> | void;
+  backfillRemoteCache?: () => Promise<unknown>;
 };
 
 export type ProcessVideoOutput = {
@@ -131,6 +132,7 @@ export async function processVideo(
   if (successfulAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
     await deps.remoteCache?.writeResult(result).catch(() => undefined);
+    await deps.backfillRemoteCache?.().catch(() => undefined);
   }
   const mode: ProcessVideoMode = successfulAgentOutput ? "generated" : bestAgentOutput ? "partialFallback" : "sourceFallback";
   if (agentFailure && mode !== "generated") {

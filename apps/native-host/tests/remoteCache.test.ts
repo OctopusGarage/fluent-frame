@@ -155,6 +155,36 @@ describe("createGithubRemoteCache", () => {
     expect(JSON.parse(Buffer.from(body.content, "base64").toString("utf8"))).toEqual(result);
   });
 
+  it("uploads results under their own workflow version", async () => {
+    const requests: Request[] = [];
+    const historicalResult = { ...result, workflowVersion: "2026-07-18-mvp-1" };
+    const provider = createGithubRemoteCache({
+      config: {
+        enabled: true,
+        provider: "github",
+        owner: "octo",
+        repo: "cache",
+        branch: "main",
+        basePath: "data/youtube",
+        writeEnabled: true,
+        token: "token-1",
+      },
+      fetch: async (input, init) => {
+        requests.push(new Request(input, init));
+        return requests.at(-1)?.method === "GET"
+          ? new Response("", { status: 404 })
+          : jsonResponse({ content: { sha: "next-sha" } });
+      },
+    });
+
+    await provider.writeResult(historicalResult);
+
+    expect(requests.map((request) => request.url)).toEqual([
+      "https://api.github.com/repos/octo/cache/contents/data/youtube/dQw4w9WgXcQ/en/2026-07-18-mvp-1/result.json?ref=main",
+      "https://api.github.com/repos/octo/cache/contents/data/youtube/dQw4w9WgXcQ/en/2026-07-18-mvp-1/result.json",
+    ]);
+  });
+
   it("skips uploads when writeEnabled is false", async () => {
     let calls = 0;
     const provider = createGithubRemoteCache({

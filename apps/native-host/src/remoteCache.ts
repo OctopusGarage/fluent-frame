@@ -3,7 +3,7 @@ import { matchesCacheIdentity } from "./cacheResult.js";
 import type { RemoteCacheConfig } from "./config.js";
 
 export type RemoteCacheProvider = {
-  readResult(videoId: string, captionLanguage: string): Promise<LearningSubtitleResult | undefined>;
+  readResult(videoId: string, captionLanguage: string, workflowVersion?: string): Promise<LearningSubtitleResult | undefined>;
   writeResult(result: LearningSubtitleResult): Promise<void>;
 };
 
@@ -20,8 +20,13 @@ export type GithubRemoteCacheDeps = {
   fetch?: FetchLike;
 };
 
-export function githubRemoteCachePath(basePath: string, videoId: string, captionLanguage: string): string {
-  return `${basePath.replace(/^\/+|\/+$/g, "")}/${videoId}/${captionLanguage}/${WORKFLOW_VERSION}/result.json`;
+export function githubRemoteCachePath(
+  basePath: string,
+  videoId: string,
+  captionLanguage: string,
+  workflowVersion = WORKFLOW_VERSION,
+): string {
+  return `${basePath.replace(/^\/+|\/+$/g, "")}/${videoId}/${captionLanguage}/${workflowVersion}/result.json`;
 }
 
 function apiUrl(config: Extract<RemoteCacheConfig, { provider: "github" }>, path: string, ref?: string): string {
@@ -77,15 +82,15 @@ export function createGithubRemoteCache({ config, fetch: fetchImpl = fetch }: Gi
   }
 
   return {
-    async readResult(videoId, captionLanguage) {
-      const path = githubRemoteCachePath(config.basePath, videoId, captionLanguage);
+    async readResult(videoId, captionLanguage, workflowVersion = WORKFLOW_VERSION) {
+      const path = githubRemoteCachePath(config.basePath, videoId, captionLanguage, workflowVersion);
       const content = await readContent(path);
       if (!content) {
         return undefined;
       }
       const parsed = decodeContent(content);
       assertRemoteResult(parsed);
-      if (!matchesCacheIdentity(parsed, videoId, captionLanguage, WORKFLOW_VERSION)) {
+      if (!matchesCacheIdentity(parsed, videoId, captionLanguage, workflowVersion)) {
         return undefined;
       }
       return parsed;
@@ -95,7 +100,7 @@ export function createGithubRemoteCache({ config, fetch: fetchImpl = fetch }: Gi
       if (!config.writeEnabled || !config.token) {
         return;
       }
-      const path = githubRemoteCachePath(config.basePath, result.videoId, result.sourceLanguage);
+      const path = githubRemoteCachePath(config.basePath, result.videoId, result.sourceLanguage, result.workflowVersion);
       const existing = await readContent(path);
       const body = {
         message: `chore(cache): update FluentFrame subtitles for ${result.videoId}`,

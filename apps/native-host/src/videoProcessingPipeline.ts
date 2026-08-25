@@ -1,5 +1,6 @@
 import type { LearningSubtitleResult } from "@fluent-frame/shared";
 import { createConfiguredRunner } from "./agentRunner.js";
+import { backfillRemoteCache } from "./cacheBackfill.js";
 import { downloadCaptions } from "./captionDownloader.js";
 import type { HostConfig } from "./config.js";
 import { processVideo, type ProcessVideoEvent, type ProcessVideoOutput } from "./processor.js";
@@ -31,5 +32,6 @@ export async function runVideoProcessingPipeline(
     runAgent,
     ...(input.onEvent ? { onEvent: input.onEvent } : {}),
     ...(input.onPartialResult ? { onPartialResult: input.onPartialResult } : {}),
+    ...(remoteCache ? { backfillRemoteCache: () => backfillRemoteCache({ cacheDir: config.cacheDir, remoteCache }) } : {}),
   });
 }
