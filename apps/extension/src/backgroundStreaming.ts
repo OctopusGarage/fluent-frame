@@ -18,6 +18,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
 
+function postToContentPort(contentPort: RuntimePort, response: HostResponse): boolean {
+  try {
+    contentPort.postMessage(response);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function registerStreamingPortListener(runtime: StreamingRuntime): void {
   runtime.onConnect?.addListener((contentPort) => {
     if (contentPort.name !== "fluent-frame-process-video") {
@@ -33,15 +42,18 @@ export function registerStreamingPortListener(runtime: StreamingRuntime): void {
       try {
         request = createProcessVideoRequest(message.videoId, true);
       } catch (error) {
-        contentPort.postMessage(createExtensionErrorResponse(error));
+        postToContentPort(contentPort, createExtensionErrorResponse(error));
         return;
       }
       nativeStream = streamNativeRequest(runtime, request, {
         onMessage(response) {
-          contentPort.postMessage(response);
+          if (!postToContentPort(contentPort, response)) {
+            nativeStream?.disconnect();
+            nativeStream = undefined;
+          }
         },
         onDisconnectBeforeTerminal(requestId) {
-          contentPort.postMessage(createErrorResponse(requestId, "NATIVE_HOST_DISCONNECTED", "Native host disconnected"));
+          postToContentPort(contentPort, createErrorResponse(requestId, "NATIVE_HOST_DISCONNECTED", "Native host disconnected"));
         },
       });
     });

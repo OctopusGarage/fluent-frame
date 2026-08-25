@@ -653,6 +653,42 @@ describe("background helpers", () => {
     expect(nativePort.disconnect).toHaveBeenCalledOnce();
   });
 
+  it("stops the native stream when a stale content port rejects a streamed response", () => {
+    let contentConnectListener: ((port: MockPort) => void) | undefined;
+    const nativePort = createMockPort("native");
+    const contentPort = createMockPort("fluent-frame-process-video");
+    const runtime = {
+      lastError: undefined,
+      sendNativeMessage: vi.fn(),
+      connectNative: vi.fn(() => nativePort),
+      onMessage: {
+        addListener: vi.fn(),
+      },
+      onConnect: {
+        addListener: vi.fn((callback: (port: MockPort) => void) => {
+          contentConnectListener = callback;
+        }),
+      },
+    } satisfies ExtensionRuntime;
+
+    registerBackgroundListener(runtime);
+    contentConnectListener?.(contentPort);
+    contentPort.emitMessage({ type: "processCurrentVideoStream", videoId: "dQw4w9WgXcQ" });
+    contentPort.postMessage.mockImplementation(() => {
+      throw new Error("Attempting to use a disconnected port object");
+    });
+
+    expect(() => {
+      nativePort.emitMessage({
+        id: (nativePort.postMessage.mock.calls[0]?.[0] as { id: string }).id,
+        ok: true,
+        type: "progress",
+        progress: { stage: "agent", message: "Generating part 1 of 2" },
+      });
+    }).not.toThrow();
+    expect(nativePort.disconnect).toHaveBeenCalledOnce();
+  });
+
   it("reports synchronous native streaming connection failures to the content port", () => {
     let contentConnectListener: ((port: MockPort) => void) | undefined;
     const contentPort = createMockPort("fluent-frame-process-video");
