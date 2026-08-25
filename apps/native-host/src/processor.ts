@@ -1,6 +1,13 @@
 import { assertAgentOutput, parseSrt, WORKFLOW_VERSION, type LearningSubtitleResult, type SubtitleCue } from "@fluent-frame/shared";
 import type { AgentBatchProgress, AgentRunner } from "./agentTypes.js";
-import { clearCachedResult, readCacheEntry, writeCachedResult } from "./cache.js";
+import {
+  clearCachedPartialResult,
+  clearCachedResult,
+  readCachedPartialResult,
+  readCacheEntry,
+  writeCachedPartialResult,
+  writeCachedResult,
+} from "./cache.js";
 import type { RemoteCacheProvider } from "./remoteCache.js";
 
 export type ProcessVideoMode = "cache" | "remoteCache" | "generated" | "partialFallback" | "sourceFallback";
@@ -102,11 +109,22 @@ export async function processVideo(
   if (!cachedCaptionText) {
     await deps.writeCachedCaptions?.(videoId, captionLanguage, captionText).catch(() => undefined);
   }
+  const cachedPartial = await readCachedPartialResult(deps.cacheDir, videoId, captionLanguage).catch(() => undefined);
   let lastSuccessfulAgentOutput: Awaited<ReturnType<AgentRunner>> | undefined;
-  const agentOutput = await deps.runAgent(captionText, {
+  if (cachedPartial) {
+    lastSuccessfulAgentOutput = cachedPartial.output;
+    await deps.onEvent?.({
+      type: "partialResult",
+      result: cachedPartial.result,
+      completedBatches: cachedPartial.completedBatches,
+      totalBatches: cachedPartial.totalBatches,
+    });
+  }
+  const runnerOptions: Parameters<AgentRunner>[1] = {
     async onBatch(progress) {
       lastSuccessfulAgentOutput = progress.output;
       const partialResult = buildLearningSubtitleResult(videoId, captionLanguage, captionText, progress.output);
+      await writeCachedPartialResult(deps.cacheDir, partialResult, progress).catch(() => undefined);
       await deps.onEvent?.({
         type: "partialResult",
         result: partialResult,
@@ -115,7 +133,11 @@ export async function processVideo(
       });
       await deps.onPartialResult?.(partialResult, progress);
     },
-  }).catch(async (error: unknown) => {
+  };
+  if (cachedPartial) {
+    runnerOptions.resumeFrom = cachedPartial;
+  }
+  const agentOutput = await deps.runAgent(captionText, runnerOptions).catch(async (error: unknown) => {
     const reason = error instanceof Error ? error.message : "Local agent failed";
     return { error: reason } as const;
   });
@@ -137,6 +159,7 @@ export async function processVideo(
       };
   if (successfulAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
+    await clearCachedPartialResult(deps.cacheDir, videoId, captionLanguage).catch(() => undefined);
     await deps.remoteCache?.writeResult(result).catch(() => undefined);
     await deps.backfillRemoteCache?.(result).catch(() => undefined);
   }

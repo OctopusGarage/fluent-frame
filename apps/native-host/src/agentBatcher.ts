@@ -90,17 +90,33 @@ async function runAgentOverCaptionBatches(
 ): Promise<AgentOutput> {
   const batches = prepareCaptionBatches(captionText);
   if (batches.length === 1) {
+    if (options.resumeFrom?.totalBatches === 1 && options.resumeFrom.completedBatches >= 1) {
+      assertAgentOutput(options.resumeFrom.output);
+      return options.resumeFrom.output;
+    }
     const output = await runBatch(batches[0]!);
     await options.onBatch?.({ output, completedBatches: 1, totalBatches: 1 });
     return output;
   }
 
-  const outputs: AgentOutput[] = [];
-  for (const batch of batches) {
+  const resumeFrom = options.resumeFrom;
+  const canResume = resumeFrom
+    && resumeFrom.totalBatches === batches.length
+    && resumeFrom.completedBatches > 0
+    && resumeFrom.completedBatches < batches.length;
+  const outputs: AgentOutput[] = canResume ? [resumeFrom.output] : [];
+  let startIndex = 0;
+  if (canResume) {
+    assertAgentOutput(resumeFrom.output);
+    startIndex = resumeFrom.completedBatches;
+  }
+
+  for (let index = startIndex; index < batches.length; index += 1) {
+    const batch = batches[index]!;
     outputs.push(await runBatch(batch));
     const merged = mergeAgentOutputs(outputs);
     assertAgentOutput(merged);
-    await options.onBatch?.({ output: merged, completedBatches: outputs.length, totalBatches: batches.length });
+    await options.onBatch?.({ output: merged, completedBatches: index + 1, totalBatches: batches.length });
   }
   const merged = mergeAgentOutputs(outputs);
   assertAgentOutput(merged);

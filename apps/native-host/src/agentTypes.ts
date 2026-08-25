@@ -10,6 +10,7 @@ export type AgentBatchProgress = {
 
 export type AgentRunnerOptions = {
   onBatch?: (progress: AgentBatchProgress) => Promise<void> | void;
+  resumeFrom?: AgentBatchProgress;
 };
 
 export type AgentRunner = (captionText: string, options?: AgentRunnerOptions) => Promise<AgentOutput>;

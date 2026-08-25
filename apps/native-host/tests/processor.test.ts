@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { WORKFLOW_VERSION } from "@fluent-frame/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { processVideo } from "../src/processor.js";
-import { readCachedResult } from "../src/cache.js";
+import { readCachedPartialResult, readCachedResult } from "../src/cache.js";
 
 let dir = "";
 
@@ -381,6 +381,125 @@ Second line.
 
     expect(processed.mode).toBe("partialFallback");
     await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+  });
+
+  it("persists partial fallback checkpoints and resumes from them on retry", async () => {
+    const captionText = `1
+00:00:00,000 --> 00:00:01,000
+First line.
+
+2
+00:00:01,000 --> 00:00:02,000
+Second line.
+`;
+    let runs = 0;
+
+    const first = await processVideo("dQw4w9WgXcQ", "en", {
+      cacheDir: dir,
+      downloadCaptions: async () => captionText,
+      runAgent: async (_captionText, options) => {
+        runs += 1;
+        await options?.onBatch?.({
+          completedBatches: 1,
+          totalBatches: 2,
+          output: {
+            subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "First line.", chinese: "第一句。", phraseIds: ["p1"] }],
+            phrases: [
+              {
+                id: "p1",
+                cueId: 1,
+                phrase: "first line",
+                meaningZh: "第一句",
+                explanationEn: "Opening sentence.",
+                difficulty: "basic" as const,
+              },
+            ],
+          },
+        });
+        throw new Error("Second batch failed");
+      },
+    });
+
+    expect(first.mode).toBe("partialFallback");
+    await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+    await expect(readCachedPartialResult(dir, "dQw4w9WgXcQ", "en")).resolves.toMatchObject({
+      completedBatches: 1,
+      totalBatches: 2,
+      result: { subtitles: expect.arrayContaining([expect.objectContaining({ id: 1, chinese: "第一句。" })]) },
+    });
+
+    const partialEvents: number[] = [];
+    const second = await processVideo("dQw4w9WgXcQ", "en", {
+      cacheDir: dir,
+      downloadCaptions: async () => captionText,
+      runAgent: async (_captionText, options) => {
+        runs += 1;
+        expect(options?.resumeFrom).toMatchObject({ completedBatches: 1, totalBatches: 2 });
+        await options?.onBatch?.({
+          completedBatches: 2,
+          totalBatches: 2,
+          output: {
+            subtitles: [
+              { id: 1, startMs: 0, endMs: 1000, english: "First line.", chinese: "第一句。", phraseIds: ["p1"] },
+              { id: 2, startMs: 0, endMs: 1000, english: "Second line.", chinese: "第二句。", phraseIds: ["p2"] },
+            ],
+            phrases: [
+              {
+                id: "p1",
+                cueId: 1,
+                phrase: "first line",
+                meaningZh: "第一句",
+                explanationEn: "Opening sentence.",
+                difficulty: "basic" as const,
+              },
+              {
+                id: "p2",
+                cueId: 2,
+                phrase: "second line",
+                meaningZh: "第二句",
+                explanationEn: "Follow-up sentence.",
+                difficulty: "basic" as const,
+              },
+            ],
+          },
+        });
+        return {
+          subtitles: [
+            { id: 1, startMs: 0, endMs: 1000, english: "First line.", chinese: "第一句。", phraseIds: ["p1"] },
+            { id: 2, startMs: 0, endMs: 1000, english: "Second line.", chinese: "第二句。", phraseIds: ["p2"] },
+          ],
+          phrases: [
+            {
+              id: "p1",
+              cueId: 1,
+              phrase: "first line",
+              meaningZh: "第一句",
+              explanationEn: "Opening sentence.",
+              difficulty: "basic" as const,
+            },
+            {
+              id: "p2",
+              cueId: 2,
+              phrase: "second line",
+              meaningZh: "第二句",
+              explanationEn: "Follow-up sentence.",
+              difficulty: "basic" as const,
+            },
+          ],
+        };
+      },
+      onEvent: (event) => {
+        if (event.type === "partialResult") {
+          partialEvents.push(event.completedBatches);
+        }
+      },
+    });
+
+    expect(runs).toBe(2);
+    expect(partialEvents).toEqual([1, 2]);
+    expect(second.mode).toBe("generated");
+    await expect(readCachedPartialResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+    await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toEqual(second.result);
   });
 
   it("returns full source subtitles when the local agent fails or times out", async () => {
