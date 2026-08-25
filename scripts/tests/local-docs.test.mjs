@@ -21,6 +21,16 @@ test("architecture docs keep local install command ownership aligned with README
   assert.match(architecture, /pnpm setup.*alias|alias.*pnpm setup/s);
 });
 
+test("architecture docs keep workspace preflight gates aligned with README", () => {
+  const readme = readFileSync(resolve(repoRoot, "README.md"), "utf8");
+  const architecture = readFileSync(resolve(repoRoot, "docs/architecture.md"), "utf8");
+
+  for (const command of ["pnpm typecheck", "pnpm test"]) {
+    assert.match(readme, new RegExp(command));
+    assert.match(architecture, new RegExp(command));
+  }
+});
+
 test("architecture docs document the content script shared-runtime boundary", () => {
   const architecture = readFileSync(resolve(repoRoot, "docs/architecture.md"), "utf8");
 

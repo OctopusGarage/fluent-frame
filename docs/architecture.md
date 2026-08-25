@@ -195,6 +195,13 @@ selected agent, tool paths, and dependency availability.
 
 ## Quality Gates
 
+Workspace preflight:
+
+```bash
+pnpm typecheck
+pnpm test
+```
+
 Local gate:
 
 ```bash
