@@ -54,6 +54,8 @@ const packageBoundaries = [
   },
 ];
 
+const operationalScriptRoot = resolve(repoRoot, "scripts");
+
 function listSourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = join(dir, entry.name);
@@ -64,6 +66,12 @@ function listSourceFiles(dir) {
 
     return /\.(?:mjs|js|ts|tsx)$/.test(entry.name) ? [entryPath] : [];
   });
+}
+
+function listFilesOneLevel(dir, pattern) {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && pattern.test(entry.name))
+    .map((entry) => join(dir, entry.name));
 }
 
 function findImportSpecifiers(source) {
@@ -221,6 +229,26 @@ test("workspace package manifests keep app dependencies one-way through shared",
     for (const forbiddenDependency of boundary.forbiddenDependencies) {
       if (dependencyNames.includes(forbiddenDependency)) {
         violations.push(`${relative(repoRoot, boundary.path)} depends on ${forbiddenDependency}`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("operational scripts consume built workspace artifacts, not package source internals", () => {
+  const violations = [];
+  const forbiddenSourceImportPattern = /(?:^|\/)(?:apps|packages)\/[^/]+\/src(?:\/|$)/;
+
+  for (const filePath of listFilesOneLevel(operationalScriptRoot, /\.mjs$/)) {
+    const source = readFileSync(filePath, "utf8");
+    const displayPath = relative(repoRoot, filePath);
+
+    for (const specifier of findImportSpecifiers(source)) {
+      const normalizedSpecifier = normalizeSpecifier(specifier, filePath);
+
+      if (forbiddenSourceImportPattern.test(normalizedSpecifier)) {
+        violations.push(`${displayPath} imports ${specifier}`);
       }
     }
   }
