@@ -612,6 +612,36 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-root")?.dataset.dragged).toBe("true");
   });
 
+  it("clears dragged panel offsets when switching to the right-side study drawer", () => {
+    const ui = createCoachUi(document);
+    ui.mount(document.body);
+    const panel = document.getElementById("ff-panel");
+    const header = document.querySelector<HTMLElement>(".ff-header");
+    vi.spyOn(panel as HTMLElement, "getBoundingClientRect").mockReturnValue({
+      x: 100,
+      y: 120,
+      top: 120,
+      left: 100,
+      right: 436,
+      bottom: 420,
+      width: 336,
+      height: 300,
+      toJSON: () => ({}),
+    });
+
+    header?.dispatchEvent(new MouseEvent("mousedown", { clientX: 130, clientY: 150, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mousemove", { clientX: 180, clientY: 190, bubbles: true }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    document.querySelector<HTMLButtonElement>('[data-layout-option="drawer"]')?.click();
+
+    expect(document.getElementById("ff-root")?.dataset.layout).toBe("drawer");
+    expect(document.getElementById("ff-root")?.dataset.dragged).toBeUndefined();
+    expect(panel?.style.left).toBe("");
+    expect(panel?.style.top).toBe("");
+    expect(panel?.style.right).toBe("");
+    expect(panel?.style.bottom).toBe("");
+  });
+
   it("restores pane visibility, display choices, and dragged positions after remounting", () => {
     const firstUi = createCoachUi(document);
     firstUi.mount(document.body);

@@ -55,6 +55,10 @@ export function createUiLayoutController(deps: UiLayoutControllerDeps): UiLayout
 
   function setLayout(layout: LayoutMode, shouldPersist = true): void {
     deps.root.dataset.layout = layout;
+    if (layout !== "panel") {
+      delete deps.root.dataset.dragged;
+      resetPosition(deps.panel);
+    }
     deps.root.querySelectorAll<HTMLButtonElement>("[data-layout-option]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.layoutOption === layout));
     });
