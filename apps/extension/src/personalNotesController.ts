@@ -115,10 +115,19 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
     async remove(id) {
       personalNotes = personalNotes.filter((note) => note.id !== id);
       render();
-      personalNotes = (await loadLatestNotes(store, personalNotes)).filter((note) => note.id !== id);
-      render();
-      await store.save(personalNotes);
-      deps.setStatus("Removed from personal notes");
+      let latestNotes = personalNotes;
+      try {
+        latestNotes = await loadLatestNotes(store, personalNotes);
+        personalNotes = latestNotes.filter((note) => note.id !== id);
+        render();
+        await store.save(personalNotes);
+        deps.setStatus("Removed from personal notes");
+      } catch (error) {
+        personalNotes = latestNotes;
+        render();
+        const message = error instanceof Error ? error.message : "Local helper failed";
+        deps.setError(`Note not removed: ${message}`);
+      }
     },
   };
 }
