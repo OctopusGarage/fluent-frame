@@ -1,5 +1,6 @@
 export type LayoutMode = "panel" | "toolbar" | "drawer";
 export type NowPaneSize = "small" | "medium" | "large";
+export type SubtitleLanguageMode = "bilingual" | "english";
 
 export type ElementPosition = {
   left?: string;
@@ -15,6 +16,7 @@ export type PersistedUiState = {
   overlayHidden?: boolean;
   nowPaneHidden?: boolean;
   nowSize?: NowPaneSize;
+  subtitleLanguageMode?: SubtitleLanguageMode;
   panelDragged?: boolean;
   subtitleDragged?: boolean;
   videoNowDragged?: boolean;
@@ -31,6 +33,10 @@ export function isLayoutMode(value: unknown): value is LayoutMode {
 
 export function isNowPaneSize(value: unknown): value is NowPaneSize {
   return value === "small" || value === "medium" || value === "large";
+}
+
+export function isSubtitleLanguageMode(value: unknown): value is SubtitleLanguageMode {
+  return value === "bilingual" || value === "english";
 }
 
 export function readUiState(win: Window | null): PersistedUiState {

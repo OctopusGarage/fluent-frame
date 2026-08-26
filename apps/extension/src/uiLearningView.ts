@@ -25,6 +25,8 @@ export type UiLearningViewDeps = {
   writeClipboard(text: string): Promise<void>;
   setStatus(message: string): void;
   setProgress(message?: string): void;
+  showChineseSubtitles(): boolean;
+  applySubtitleLanguageMode(): void;
 };
 
 export function createUiLearningView(deps: UiLearningViewDeps): UiLearningView {
@@ -43,6 +45,7 @@ export function createUiLearningView(deps: UiLearningViewDeps): UiLearningView {
   function renderCueWindow(cues: SubtitleCue[], overlayCue: SubtitleCue | undefined = cues[0]): void {
     deps.byId("ff-english").textContent = overlayCue?.english ?? "";
     deps.byId("ff-chinese").textContent = overlayCue?.chinese ?? "";
+    deps.byId("ff-chinese").hidden = !deps.showChineseSubtitles();
     deps.root.dataset.subtitleActive = String(Boolean(overlayCue?.english || overlayCue?.chinese));
     if (!result) {
       return;
@@ -86,6 +89,7 @@ export function createUiLearningView(deps: UiLearningViewDeps): UiLearningView {
       return;
     }
     videoNow.replaceChildren(...phrases.map((phrase) => renderVideoNowCard(deps.doc, phrase)));
+    deps.applySubtitleLanguageMode();
   }
 
   function renderCurrentLearningEvents(currentMs: number): void {

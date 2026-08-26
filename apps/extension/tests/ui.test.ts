@@ -435,6 +435,55 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-root")?.dataset.overlayHidden).toBe("false");
   });
 
+  it("toggles subtitle display between bilingual and English only", () => {
+    const ui = createCoachUi(document);
+    const player = document.createElement("div");
+    const video = document.createElement("video");
+    player.className = "html5-video-player playing-mode";
+    player.append(video);
+    document.body.appendChild(player);
+    ui.mount(document.body);
+    ui.setResult(overlappingResult);
+    ui.placeSubtitleOverlay(video);
+
+    const toggle = document.querySelector<HTMLButtonElement>("#ff-toggle-subtitle-language");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
+    expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("Bilingual");
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>(".ff-video-now-chinese")?.hidden).toBe(false);
+
+    toggle?.click();
+
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("english");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("English only");
+    expect(document.getElementById("ff-english")?.textContent).toBe("Tonight we're in for an all-action affair,");
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>(".ff-video-now-chinese")?.hidden).toBe(true);
+
+    toggle?.click();
+
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("bilingual");
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>(".ff-video-now-chinese")?.hidden).toBe(false);
+  });
+
+  it("persists the English-only subtitle display preference", () => {
+    let ui = createCoachUi(document);
+    ui.mount(document.body);
+    document.querySelector<HTMLButtonElement>("#ff-toggle-subtitle-language")?.click();
+
+    document.body.replaceChildren();
+    ui = createCoachUi(document);
+    ui.mount(document.body);
+    ui.setResult(result);
+
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("english");
+    expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("English only");
+    expect(document.getElementById("ff-english")?.textContent).toBe("Nice pass.");
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
+  });
+
   it("hides the full FluentFrame pane from the panel header and restores it from the badge", () => {
     const ui = createCoachUi(document);
     ui.mount(document.body);

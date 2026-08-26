@@ -5,6 +5,7 @@ import { createPersonalNotesController, type PersonalNotesStore } from "./person
 import { createUiLearningView } from "./uiLearningView.js";
 import { createUiLayoutController } from "./uiLayoutController.js";
 import { createUiPlacementController } from "./uiPlacement.js";
+import { isSubtitleLanguageMode, readUiState, writeUiState, type SubtitleLanguageMode } from "./uiPersistence.js";
 import { compactProgressMessage, createCoachRoot } from "./uiTemplate.js";
 
 export type CoachUiOptions = {
@@ -47,6 +48,7 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     throw new Error("Missing UI element ff-video-now");
   }
   const videoNow: HTMLElement = videoNowElement;
+  let subtitleLanguageMode: SubtitleLanguageMode = "bilingual";
 
   function byId<T extends HTMLElement>(id: string): T {
     const element = ({
@@ -77,6 +79,33 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     const nextMessage = compactProgressMessage(message);
     progress.textContent = nextMessage ?? "";
     progress.hidden = !nextMessage;
+  }
+
+  function showChineseSubtitles(): boolean {
+    return subtitleLanguageMode !== "english";
+  }
+
+  function applySubtitleLanguageMode(): void {
+    root.dataset.subtitleLanguageMode = subtitleLanguageMode;
+    const englishOnly = subtitleLanguageMode === "english";
+    const toggle = byId<HTMLButtonElement>("ff-toggle-subtitle-language");
+    toggle.setAttribute("aria-pressed", String(englishOnly));
+    const meta = toggle.querySelector<HTMLElement>(".ff-command-meta");
+    if (meta) {
+      meta.textContent = englishOnly ? "English only" : "Bilingual";
+    }
+    byId("ff-chinese").hidden = englishOnly;
+    doc.querySelectorAll<HTMLElement>(".ff-video-now-chinese").forEach((element) => {
+      element.hidden = englishOnly;
+    });
+  }
+
+  function persistSubtitleLanguageMode(): void {
+    const current = readUiState(doc.defaultView);
+    writeUiState(doc.defaultView, {
+      ...current,
+      subtitleLanguageMode,
+    });
   }
 
   function renderNotes(notes: import("@fluent-frame/shared").PersonalNote[]): void {
@@ -116,6 +145,8 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     writeClipboard,
     setStatus: setStatusText,
     setProgress: setProgressText,
+    showChineseSubtitles,
+    applySubtitleLanguageMode,
   });
   const layoutController = createUiLayoutController({
     win: doc.defaultView,
@@ -132,6 +163,12 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
 
   byId<HTMLButtonElement>("ff-toggle-now").addEventListener("click", () => {
     layoutController.toggleVideoNow();
+  });
+
+  byId<HTMLButtonElement>("ff-toggle-subtitle-language").addEventListener("click", () => {
+    subtitleLanguageMode = subtitleLanguageMode === "english" ? "bilingual" : "english";
+    applySubtitleLanguageMode();
+    persistSubtitleLanguageMode();
   });
 
   panelToggle.addEventListener("click", () => {
@@ -169,7 +206,12 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     });
   });
 
+  const savedUiState = readUiState(doc.defaultView);
+  subtitleLanguageMode = isSubtitleLanguageMode(savedUiState.subtitleLanguageMode)
+    ? savedUiState.subtitleLanguageMode
+    : "bilingual";
   layoutController.applySaved();
+  applySubtitleLanguageMode();
 
   createDragController({ doc, root, byId, onChange: layoutController.persist }).bind();
   const placement = createUiPlacementController({

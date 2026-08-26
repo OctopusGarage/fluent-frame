@@ -198,6 +198,11 @@
   text-wrap: balance;
 }
 
+#ff-root[data-subtitle-language-mode="english"] #ff-chinese,
+#ff-root[data-subtitle-language-mode="english"] .ff-video-now-chinese {
+  display: none !important;
+}
+
 #ff-panel {
   position: fixed;
   top: 92px;

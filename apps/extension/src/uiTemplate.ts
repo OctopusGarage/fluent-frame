@@ -7,6 +7,7 @@ export function createCoachRoot(doc: Document): HTMLElement {
   root.dataset.hasResult = "false";
   root.dataset.nowPaneHidden = "false";
   root.dataset.nowSize = "medium";
+  root.dataset.subtitleLanguageMode = "bilingual";
   root.innerHTML = `
     <button id="ff-video-badge" type="button" aria-label="Open FluentFrame" title="FluentFrame">
       <span class="ff-badge-glyph" aria-hidden="true">
@@ -68,6 +69,12 @@ export function createCoachRoot(doc: Document): HTMLElement {
           <span aria-hidden="true">N</span>
           <span class="ff-command-title">Now pane</span>
           <span class="ff-command-meta">Visible</span>
+        </button>
+
+        <button id="ff-toggle-subtitle-language" class="ff-quiet-button" type="button" aria-pressed="false">
+          <span aria-hidden="true">EN</span>
+          <span class="ff-command-title">Subtitle text</span>
+          <span class="ff-command-meta">Bilingual</span>
         </button>
 
         <button id="ff-reset-layout" class="ff-quiet-button" type="button" aria-label="Reset FluentFrame layout">
