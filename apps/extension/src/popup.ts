@@ -1,4 +1,5 @@
 import type { HostResponse } from "@fluent-frame/shared";
+import { compactHomePath } from "./displayPath.js";
 import { createPopupQueue } from "./popupQueue.js";
 import { createPopupTabs } from "./popupTabs.js";
 import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
@@ -55,7 +56,8 @@ function setHealthLine(id: string, label: string, healthy: boolean, detail: stri
   if (!target) {
     return;
   }
-  target.textContent = `${healthy ? "OK" : "Needs setup"} - ${label}${detail ? `: ${detail}` : ""}`;
+  const displayDetail = compactHomePath(detail);
+  target.textContent = `${healthy ? "OK" : "Needs setup"} - ${label}${displayDetail ? `: ${displayDetail}` : ""}`;
   target.dataset.state = healthy ? "ok" : "missing";
 }
 
