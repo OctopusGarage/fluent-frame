@@ -6,36 +6,51 @@ import { join, relative, resolve, sep } from "node:path";
 
 const repoRoot = resolve(import.meta.dirname, "..", "..");
 
+const sharedBoundaryForbiddenSpecifiers = [
+  /^@fluent-frame\/(?:extension|native-host)(?:\/|$)/,
+  /^apps\//,
+];
+const extensionBoundaryForbiddenSpecifiers = [
+  /^@fluent-frame\/native-host(?:\/|$)/,
+  /(?:^|\/)apps\/native-host(?:\/|$)/,
+  /(?:^|\/)packages\/shared\/src(?:\/|$)/,
+];
+const nativeHostBoundaryForbiddenSpecifiers = [
+  /^@fluent-frame\/extension(?:\/|$)/,
+  /(?:^|\/)apps\/extension(?:\/|$)/,
+  /(?:^|\/)packages\/shared\/src(?:\/|$)/,
+];
+
 const sourceRoots = [
   {
     name: "shared",
     path: resolve(repoRoot, "packages/shared/src"),
-    forbiddenSpecifiers: [/^@fluent-frame\/(?:extension|native-host)(?:\/|$)/, /^apps\//],
+    forbiddenSpecifiers: sharedBoundaryForbiddenSpecifiers,
   },
   {
     name: "shared tests",
     path: resolve(repoRoot, "packages/shared/tests"),
-    forbiddenSpecifiers: [/^@fluent-frame\/(?:extension|native-host)(?:\/|$)/, /^apps\//],
+    forbiddenSpecifiers: sharedBoundaryForbiddenSpecifiers,
   },
   {
     name: "extension",
     path: resolve(repoRoot, "apps/extension/src"),
-    forbiddenSpecifiers: [/^@fluent-frame\/native-host(?:\/|$)/, /(?:^|\/)apps\/native-host(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: extensionBoundaryForbiddenSpecifiers,
   },
   {
     name: "extension tests",
     path: resolve(repoRoot, "apps/extension/tests"),
-    forbiddenSpecifiers: [/^@fluent-frame\/native-host(?:\/|$)/, /(?:^|\/)apps\/native-host(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: extensionBoundaryForbiddenSpecifiers,
   },
   {
     name: "native host",
     path: resolve(repoRoot, "apps/native-host/src"),
-    forbiddenSpecifiers: [/^@fluent-frame\/extension(?:\/|$)/, /(?:^|\/)apps\/extension(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: nativeHostBoundaryForbiddenSpecifiers,
   },
   {
     name: "native host tests",
     path: resolve(repoRoot, "apps/native-host/tests"),
-    forbiddenSpecifiers: [/^@fluent-frame\/extension(?:\/|$)/, /(?:^|\/)apps\/extension(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: nativeHostBoundaryForbiddenSpecifiers,
   },
 ];
 
