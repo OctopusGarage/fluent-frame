@@ -81,10 +81,6 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     progress.hidden = !nextMessage;
   }
 
-  function showChineseSubtitles(): boolean {
-    return subtitleLanguageMode !== "english";
-  }
-
   function applySubtitleLanguageMode(): void {
     root.dataset.subtitleLanguageMode = subtitleLanguageMode;
     const englishOnly = subtitleLanguageMode === "english";
@@ -94,7 +90,7 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     if (meta) {
       meta.textContent = englishOnly ? "English only" : "Bilingual";
     }
-    byId("ff-chinese").hidden = englishOnly;
+    byId("ff-chinese").hidden = false;
     doc.querySelectorAll<HTMLElement>(".ff-video-now-chinese").forEach((element) => {
       element.hidden = englishOnly;
     });
@@ -145,7 +141,6 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     writeClipboard,
     setStatus: setStatusText,
     setProgress: setProgressText,
-    showChineseSubtitles,
     applySubtitleLanguageMode,
   });
   const layoutController = createUiLayoutController({

@@ -458,7 +458,8 @@ describe("createCoachUi", () => {
     expect(toggle?.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("English only");
     expect(document.getElementById("ff-english")?.textContent).toBe("Tonight we're in for an all-action affair,");
-    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    expect(document.getElementById("ff-chinese")?.textContent).toBe("今晚必将是一场激烈大战，");
     expect(document.querySelector<HTMLElement>(".ff-video-now-chinese")?.hidden).toBe(true);
 
     toggle?.click();
@@ -481,7 +482,8 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("english");
     expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("English only");
     expect(document.getElementById("ff-english")?.textContent).toBe("Nice pass.");
-    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    expect(document.getElementById("ff-chinese")?.textContent).toBe("传得漂亮。");
   });
 
   it("hides the full FluentFrame pane from the panel header and restores it from the badge", () => {
