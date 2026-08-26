@@ -411,3 +411,11 @@ test("shared caption language parser has one runtime owner", () => {
 
   assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
 });
+
+test("e2e native host manifests use the shared host name owner", () => {
+  const helpersPath = resolve(repoRoot, "e2e/helpers.ts");
+  const source = readFileSync(helpersPath, "utf8");
+
+  assert.match(source, /import\s+\{\s*NATIVE_HOST_NAME\s*\}\s+from\s+["']@fluent-frame\/shared["']/);
+  assert.doesNotMatch(source, /NATIVE_HOST_NAME\s*=\s*["']com\.octopusgarage\.fluent_frame["']/);
+});

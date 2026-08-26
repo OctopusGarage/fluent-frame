@@ -1,9 +1,8 @@
+import { NATIVE_HOST_NAME } from "@fluent-frame/shared";
 import { chromium, type BrowserContext } from "@playwright/test";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-
-export const NATIVE_HOST_NAME = "com.octopusgarage.fluent_frame";
 
 export async function launchExtensionContext(
   extensionPath: string,
