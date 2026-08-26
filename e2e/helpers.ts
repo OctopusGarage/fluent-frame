@@ -1,4 +1,4 @@
-import { NATIVE_HOST_NAME } from "@fluent-frame/shared";
+import { NATIVE_HOST_NAME } from "../packages/shared/dist/index.js";
 import { chromium, type BrowserContext } from "@playwright/test";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
