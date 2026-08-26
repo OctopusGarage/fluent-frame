@@ -1,17 +1,11 @@
 import { isValidLearningSubtitleResult } from "./resultValidation.js";
 import type { HostHealth, HostProgress, HostResponse } from "./protocol.js";
 import { parsePersonalNotes } from "./personalNotes.js";
+import { parseNonEmptyString } from "./protocolScalars.js";
 import { parseQueueJob, parseQueueState } from "./queue.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
-}
-
-function parseNonEmptyString(value: unknown, message: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(message);
-  }
-  return value;
 }
 
 function parseOptionalNonNegativeNumber(value: unknown, message: string): number | undefined {

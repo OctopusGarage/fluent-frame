@@ -1,4 +1,4 @@
-import { parseCaptionLanguage, parseYoutubeVideoId } from "./protocolScalars.js";
+import { parseCaptionLanguage, parseNonEmptyString, parseYoutubeVideoId } from "./protocolScalars.js";
 
 export type QueueJobStatus = "queued" | "running" | "done" | "failed" | "skipped";
 
@@ -27,13 +27,6 @@ export type QueueState = {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
-}
-
-function parseNonEmptyString(value: unknown, message: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(message);
-  }
-  return value;
 }
 
 function parseOptionalString(value: unknown, message: string): string | undefined {
