@@ -90,10 +90,7 @@ export function createCoachUi(doc: Document, options: CoachUiOptions = {}): Coac
     if (meta) {
       meta.textContent = englishOnly ? "English only" : "Bilingual";
     }
-    byId("ff-chinese").hidden = false;
-    doc.querySelectorAll<HTMLElement>(".ff-video-now-chinese").forEach((element) => {
-      element.hidden = englishOnly;
-    });
+    byId("ff-chinese").hidden = englishOnly;
   }
 
   function persistSubtitleLanguageMode(): void {

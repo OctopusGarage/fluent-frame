@@ -1,6 +1,6 @@
 import type { LearningSubtitleResult, PhraseExplanation, SubtitleCue } from "@fluent-frame/shared";
 
-export const VISIBLE_SENTENCE_COUNT = 3;
+export const VISIBLE_SENTENCE_COUNT = 5;
 
 export type CaptionWindow = {
   activeCue: SubtitleCue | undefined;

@@ -76,11 +76,29 @@ const overlappingResult: LearningSubtitleResult = {
       chinese: "无论是西班牙还是法国。",
       phraseIds: ["p3"],
     },
+    {
+      id: 4,
+      startMs: 8120,
+      endMs: 9000,
+      english: "with the crowd right behind them.",
+      chinese: "球迷全力支持他们。",
+      phraseIds: ["p4"],
+    },
+    {
+      id: 5,
+      startMs: 9000,
+      endMs: 9800,
+      english: "Every touch matters now.",
+      chinese: "现在每一次触球都很关键。",
+      phraseIds: ["p5"],
+    },
   ],
   phrases: [
     { id: "p1", cueId: 1, phrase: "all-action affair", meaningZh: "激烈比赛", explanationEn: "A match with lots of action.", difficulty: "useful" },
     { id: "p2", cueId: 2, phrase: "may the best team win", meaningZh: "愿强者胜", explanationEn: "A polite contest phrase.", difficulty: "basic" },
     { id: "p3", cueId: 3, phrase: "be it Spain or France", meaningZh: "无论西班牙还是法国", explanationEn: "Means either option is possible.", difficulty: "useful" },
+    { id: "p4", cueId: 4, phrase: "right behind them", meaningZh: "全力支持他们", explanationEn: "Strongly supporting a team.", difficulty: "useful" },
+    { id: "p5", cueId: 5, phrase: "every touch matters", meaningZh: "每次触球都关键", explanationEn: "Small actions are important.", difficulty: "advanced" },
   ],
 };
 
@@ -148,7 +166,7 @@ describe("createCoachUi", () => {
     expect(document.body.textContent).toContain("nice pass");
   });
 
-  it("shows three active learning events with source context and a separate learning history", () => {
+  it("shows five active learning events with source context and a separate learning history", () => {
     const ui = createCoachUi(document);
     ui.mount(document.body);
     ui.setResult(overlappingResult);
@@ -156,7 +174,7 @@ describe("createCoachUi", () => {
     ui.sync(2500);
 
     const currentCards = Array.from(document.querySelectorAll<HTMLElement>("#ff-current-phrase .ff-current-phrase-item"));
-    expect(currentCards).toHaveLength(3);
+    expect(currentCards).toHaveLength(5);
     expect(currentCards[0]?.textContent).toContain("all-action affair");
     expect(currentCards[0]?.textContent).toContain("激烈比赛");
     expect(currentCards[0]?.textContent).toContain("A match with lots of action.");
@@ -170,7 +188,7 @@ describe("createCoachUi", () => {
     expect(document.body.textContent).toContain("History");
 
     const historyCards = Array.from(document.querySelectorAll<HTMLElement>("#ff-phrase-list .ff-phrase-item"));
-    expect(historyCards).toHaveLength(3);
+    expect(historyCards).toHaveLength(5);
     expect(historyCards[0]?.textContent).toContain("all-action affair");
     expect(historyCards[0]?.textContent).toContain("激烈比赛");
     expect(historyCards[0]?.textContent).toContain("A match with lots of action.");
@@ -458,9 +476,9 @@ describe("createCoachUi", () => {
     expect(toggle?.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("English only");
     expect(document.getElementById("ff-english")?.textContent).toBe("Tonight we're in for an all-action affair,");
-    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
     expect(document.getElementById("ff-chinese")?.textContent).toBe("今晚必将是一场激烈大战，");
-    expect(document.querySelector<HTMLElement>(".ff-video-now-chinese")?.hidden).toBe(true);
+    expect(document.querySelector<HTMLElement>(".ff-video-now-chinese")?.hidden).toBe(false);
 
     toggle?.click();
 
@@ -482,7 +500,7 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("english");
     expect(document.querySelector("#ff-toggle-subtitle-language .ff-command-meta")?.textContent).toBe("English only");
     expect(document.getElementById("ff-english")?.textContent).toBe("Nice pass.");
-    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
     expect(document.getElementById("ff-chinese")?.textContent).toBe("传得漂亮。");
   });
 
@@ -548,7 +566,7 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-root")?.dataset.layout).toBe("panel");
   });
 
-  it("keeps the full pane intact while mirroring three compact learning pairs inside the video", () => {
+  it("keeps the full pane intact while mirroring five bilingual learning pairs inside the video", () => {
     const ui = createCoachUi(document);
     const player = document.createElement("div");
     const video = document.createElement("video");
@@ -564,7 +582,7 @@ describe("createCoachUi", () => {
     const videoNow = document.getElementById("ff-video-now");
     expect(panel?.parentElement?.id).toBe("ff-root");
     expect(panel?.classList.contains("ff-panel-in-player")).toBe(false);
-    expect(document.querySelectorAll("#ff-current-phrase .ff-current-phrase-item")).toHaveLength(3);
+    expect(document.querySelectorAll("#ff-current-phrase .ff-current-phrase-item")).toHaveLength(5);
     expect(document.getElementById("ff-current-phrase")?.textContent).toContain("all-action affair");
     expect(document.getElementById("ff-phrase-list")?.textContent).toContain("may the best team win");
     expect(videoNow?.parentElement).toBe(player);
@@ -575,14 +593,18 @@ describe("createCoachUi", () => {
     expect(videoNow?.textContent).toContain("愿强者胜");
     expect(videoNow?.textContent).toContain("be it Spain or France");
     expect(videoNow?.textContent).toContain("无论西班牙还是法国");
+    expect(videoNow?.textContent).toContain("right behind them");
+    expect(videoNow?.textContent).toContain("全力支持他们");
+    expect(videoNow?.textContent).toContain("every touch matters");
+    expect(videoNow?.textContent).toContain("每次触球都关键");
     expect(videoNow?.textContent).not.toContain("Tonight we're in for an all-action affair,");
     expect(videoNow?.textContent).not.toContain("今晚必将是一场激烈大战，");
     expect(videoNow?.textContent).not.toContain("A match with lots of action.");
     expect(videoNow?.textContent).not.toContain("A polite contest phrase.");
-    expect(videoNow?.querySelectorAll(".ff-video-now-item")).toHaveLength(3);
-    expect(videoNow?.querySelectorAll(".ff-video-now-line")).toHaveLength(6);
-    expect(videoNow?.querySelectorAll(".ff-video-now-english")).toHaveLength(3);
-    expect(videoNow?.querySelectorAll(".ff-video-now-chinese")).toHaveLength(3);
+    expect(videoNow?.querySelectorAll(".ff-video-now-item")).toHaveLength(5);
+    expect(videoNow?.querySelectorAll(".ff-video-now-line")).toHaveLength(10);
+    expect(videoNow?.querySelectorAll(".ff-video-now-english")).toHaveLength(5);
+    expect(videoNow?.querySelectorAll(".ff-video-now-chinese")).toHaveLength(5);
     expect(videoNow?.querySelectorAll("button")).toHaveLength(0);
     expect(videoNow?.style.top).toBe("96px");
     expect(document.getElementById("ff-root")?.dataset.layout).toBe("panel");
@@ -1147,7 +1169,7 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-english")?.textContent).toBe("and may the best team win,");
     expect(document.getElementById("ff-chinese")?.textContent).toBe("愿更强的一方获胜，");
     expect(document.getElementById("ff-current-phrase")?.textContent).toContain("may the best team win");
-    expect(document.querySelectorAll("#ff-current-phrase .ff-current-phrase-item")).toHaveLength(3);
+    expect(document.querySelectorAll("#ff-current-phrase .ff-current-phrase-item")).toHaveLength(5);
 
     ui.sync(4200);
 

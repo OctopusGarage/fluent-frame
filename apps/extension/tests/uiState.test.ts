@@ -12,24 +12,28 @@ const result: LearningSubtitleResult = {
     { id: 2, startMs: 1000, endMs: 2000, english: "Two.", chinese: "二。", phraseIds: ["p2"] },
     { id: 3, startMs: 2000, endMs: 3000, english: "Three.", chinese: "三。", phraseIds: ["p3"] },
     { id: 4, startMs: 3000, endMs: 4000, english: "Four.", chinese: "四。", phraseIds: ["p4"] },
+    { id: 5, startMs: 4000, endMs: 5000, english: "Five.", chinese: "五。", phraseIds: ["p5"] },
+    { id: 6, startMs: 5000, endMs: 6000, english: "Six.", chinese: "六。", phraseIds: ["p6"] },
   ],
   phrases: [
     { id: "p1", cueId: 1, phrase: "one", meaningZh: "第一句", explanationEn: "Opening idea.", difficulty: "basic" },
     { id: "p2", cueId: 2, phrase: "two", meaningZh: "第二句", explanationEn: "Follow-up idea.", difficulty: "basic" },
     { id: "p3", cueId: 3, phrase: "three", meaningZh: "第三句", explanationEn: "Current idea.", difficulty: "basic" },
     { id: "p4", cueId: 4, phrase: "four", meaningZh: "第四句", explanationEn: "Upcoming idea.", difficulty: "basic" },
+    { id: "p5", cueId: 5, phrase: "five", meaningZh: "第五句", explanationEn: "Another upcoming idea.", difficulty: "basic" },
+    { id: "p6", cueId: 6, phrase: "six", meaningZh: "第六句", explanationEn: "Later idea.", difficulty: "basic" },
   ],
 };
 
 describe("ui state selectors", () => {
-  it("keeps one active subtitle cue and a stable three-cue display window", () => {
+  it("keeps one active subtitle cue and a stable five-cue display window", () => {
     expect(selectCaptionWindow(result.subtitles, 2500)).toEqual({
       activeCue: result.subtitles[2],
-      cues: [result.subtitles[1], result.subtitles[2], result.subtitles[3]],
+      cues: [result.subtitles[1], result.subtitles[2], result.subtitles[3], result.subtitles[4], result.subtitles[5]],
     });
   });
 
   it("selects upcoming learning events from the current playback position", () => {
-    expect(selectLearningEventWindow(result, 2500).map((phrase) => phrase.id)).toEqual(["p3", "p4"]);
+    expect(selectLearningEventWindow(result, 2500).map((phrase) => phrase.id)).toEqual(["p3", "p4", "p5", "p6"]);
   });
 });
