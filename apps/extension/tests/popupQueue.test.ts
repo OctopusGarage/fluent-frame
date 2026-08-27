@@ -123,6 +123,45 @@ describe("createPopupQueue", () => {
     expect(sendMessage).toHaveBeenCalledOnce();
   });
 
+  it("surfaces queue refresh failures instead of leaving stale queue state silent", async () => {
+    const sendMessage = vi.fn(async () => ({ id: "q1", ok: false, type: "error", message: "Native host unavailable" }));
+    const setStatus = vi.fn();
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage },
+      openTab: vi.fn(),
+      setStatus,
+    });
+
+    await popupQueue.refresh();
+
+    expect(setStatus).toHaveBeenCalledWith("Native host unavailable");
+  });
+
+  it("keeps a successful queue action visible when the follow-up refresh fails", async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "retry-1",
+        ok: true,
+        type: "queueJob",
+        message: "Queued",
+        job: job({ id: "failed", status: "queued" }),
+      })
+      .mockResolvedValueOnce({ id: "q1", ok: false, type: "error", message: "Native host unavailable" });
+    const setStatus = vi.fn();
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage },
+      openTab: vi.fn(),
+      setStatus,
+    });
+
+    await popupQueue.sendAction({ type: "retryQueueJob", jobId: "failed" });
+
+    expect(setStatus).toHaveBeenLastCalledWith("Queued");
+  });
+
   it("renders the latest queued videos at the top", () => {
     const popupQueue = createPopupQueue({
       doc: document,

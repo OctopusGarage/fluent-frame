@@ -80,10 +80,20 @@ function latestJobsFirst(jobs: QueueJob[]): QueueJob[] {
 }
 
 export function createPopupQueue(deps: PopupQueueDeps) {
-  async function refresh(): Promise<void> {
-    const response = (await deps.runtime.sendMessage({ type: "getQueue" })) as HostResponse;
-    if (response?.ok && response.type === "queue") {
-      render(response.queue);
+  async function refresh(options: { preserveStatusOnFailure?: boolean } = {}): Promise<void> {
+    try {
+      const response = (await deps.runtime.sendMessage({ type: "getQueue" })) as HostResponse;
+      if (response?.ok && response.type === "queue") {
+        render(response.queue);
+        return;
+      }
+      if (!options.preserveStatusOnFailure) {
+        deps.setStatus(response && !response.ok ? response.message : "Queue refresh failed.");
+      }
+    } catch (error) {
+      if (!options.preserveStatusOnFailure) {
+        deps.setStatus(error instanceof Error ? error.message : "Queue refresh failed.");
+      }
     }
   }
 
@@ -99,10 +109,12 @@ export function createPopupQueue(deps: PopupQueueDeps) {
       deps.setStatus(response?.message ?? "Queue request failed.");
       return;
     }
+    let preserveStatusOnRefreshFailure = false;
     if (response.type === "queueJob") {
       deps.setStatus(response.message);
+      preserveStatusOnRefreshFailure = true;
     }
-    await refresh();
+    await refresh({ preserveStatusOnFailure: preserveStatusOnRefreshFailure });
   }
 
   function render(queue: QueueState): void {

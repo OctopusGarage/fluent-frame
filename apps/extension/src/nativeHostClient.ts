@@ -105,7 +105,17 @@ export function streamNativeRequest(
       sink.onDisconnectBeforeTerminal(request.id);
     }
   });
-  nativePort.postMessage(request);
+  try {
+    nativePort.postMessage(request);
+  } catch (error) {
+    terminalResponseReceived = true;
+    sink.onMessage(createErrorResponse(
+      request.id,
+      "NATIVE_HOST_UNAVAILABLE",
+      error instanceof Error ? error.message : "Native host unavailable",
+    ));
+    nativePort.disconnect();
+  }
   return {
     disconnect() {
       closedByClient = true;

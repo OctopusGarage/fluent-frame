@@ -12,6 +12,14 @@ function tabMessageErrorMessage(error: unknown): string {
     : "Could not reach the YouTube page.";
 }
 
+function failedTabResponseMessage(response: unknown): string | undefined {
+  if (!response || typeof response !== "object" || (response as { ok?: unknown }).ok !== false) {
+    return undefined;
+  }
+  const message = (response as { message?: unknown }).message;
+  return typeof message === "string" && message.trim() ? message : "Could not complete the page command.";
+}
+
 export function createPopupTabs(deps: PopupTabsDeps) {
   async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
     const [tab] = await deps.tabs.query({ active: true, currentWindow: true });
@@ -26,7 +34,12 @@ export function createPopupTabs(deps: PopupTabsDeps) {
         return;
       }
       deps.setStatus(pendingMessage);
-      await deps.tabs.sendMessage(tab.id, message);
+      const response = await deps.tabs.sendMessage(tab.id, message);
+      const failureMessage = failedTabResponseMessage(response);
+      if (failureMessage) {
+        deps.setStatus(failureMessage);
+        return;
+      }
       deps.setStatus(successMessage);
     } catch (error) {
       deps.setStatus(tabMessageErrorMessage(error));

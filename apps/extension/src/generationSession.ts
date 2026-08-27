@@ -222,7 +222,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
   }
 
   function handleNavigation(videoId: string | undefined): void {
-    if (videoId && videoId !== lastVideoId) {
+    if (videoId !== lastVideoId) {
       lastVideoId = videoId;
       latestRequestSequence += 1;
       cancel();

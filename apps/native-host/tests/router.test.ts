@@ -350,8 +350,8 @@ console.log("Never Gonna Give You Up");
         id: "queue-retry-1",
         ok: true,
         type: "queueJob",
-        message: "Queued",
-        job: { status: "queued", title: "Never Gonna Give You Up" },
+        message: "Already ready",
+        job: { status: "done", title: "Never Gonna Give You Up" },
       });
       await expect(handleRequest({
         id: "queue3",

@@ -89,6 +89,9 @@ export function buildNativeHostManifest(wrapperPath: string, allowedOrigins: str
 export function resolveAllowedOrigins(existingManifest?: unknown, extensionId?: string): string[] {
   const trimmedExtensionId = extensionId?.trim();
   if (trimmedExtensionId) {
+    if (!/^[a-p]{32}$/.test(trimmedExtensionId)) {
+      throw new Error("Invalid Chrome extension ID");
+    }
     return [`chrome-extension://${trimmedExtensionId}/`];
   }
 

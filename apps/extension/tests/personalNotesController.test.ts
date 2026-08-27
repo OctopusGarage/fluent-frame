@@ -50,18 +50,22 @@ function createController(input: {
   load: () => Promise<PersonalNote[]>;
   save: (notes: PersonalNote[]) => Promise<void>;
 }) {
-  return createPersonalNotesController({
+  const render = vi.fn();
+  const setStatus = vi.fn();
+  const setError = vi.fn();
+  const controller = createPersonalNotesController({
     store: input,
-    render: vi.fn(),
-    setStatus: vi.fn(),
-    setError: vi.fn(),
+    render,
+    setStatus,
+    setError,
   });
+  return { controller, render, setStatus, setError };
 }
 
 describe("createPersonalNotesController", () => {
   it("preserves notes saved by another tab when adding a note from stale local state", async () => {
     const saved: PersonalNote[][] = [];
-    const controller = createController({
+    const { controller } = createController({
       load: vi.fn().mockResolvedValue([existingNote]),
       save: vi.fn(async (notes) => {
         saved.push(notes);
@@ -77,7 +81,7 @@ describe("createPersonalNotesController", () => {
   it("preserves notes saved by another tab when removing a note from stale local state", async () => {
     let loadCount = 0;
     const saved: PersonalNote[][] = [];
-    const controller = createController({
+    const { controller } = createController({
       load: vi.fn(async () => {
         loadCount += 1;
         return loadCount === 1 ? [noteToRemove] : [noteToRemove, existingNote];
@@ -94,5 +98,22 @@ describe("createPersonalNotesController", () => {
     await controller.remove(noteToRemove.id);
 
     expect(saved).toEqual([[existingNote]]);
+  });
+
+  it("surfaces save failures when removing a note", async () => {
+    const { controller, setError } = createController({
+      load: vi.fn().mockResolvedValue([noteToRemove]),
+      save: vi.fn(async () => {
+        throw new Error("Native save failed");
+      }),
+    });
+    controller.load();
+    await vi.waitFor(() => {
+      expect(controller.notes()).toHaveLength(1);
+    });
+
+    await controller.remove(noteToRemove.id);
+
+    expect(setError).toHaveBeenCalledWith("Note not removed: Native save failed");
   });
 });

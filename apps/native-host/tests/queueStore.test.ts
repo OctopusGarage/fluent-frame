@@ -186,6 +186,21 @@ describe("QueueStore", () => {
     });
   });
 
+  it("does not requeue a job that became ready before a stale retry request arrives", async () => {
+    await withTempDir(async (dir) => {
+      const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });
+      const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      await store.markFailed(job.id, "Codex timed out");
+      await store.markDone(job.id);
+
+      const retried = await store.retry(job.id);
+
+      expect(retried.message).toBe("Already ready");
+      expect(retried.job.status).toBe("done");
+      expect((await store.getQueue()).jobs[0]?.status).toBe("done");
+    });
+  });
+
   it("backs up a corrupt queue file before creating a fresh queue", async () => {
     await withTempDir(async (dir) => {
       const queueFile = join(dir, "queue", "jobs.json");

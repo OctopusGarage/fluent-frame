@@ -28,4 +28,16 @@ describe("createPopupTabs", () => {
 
     expect(setStatus).toHaveBeenLastCalledWith("Refresh the YouTube tab, then try again.");
   });
+
+  it("surfaces content-script command failures instead of reporting success", async () => {
+    const setStatus = vi.fn();
+    const tabs = {
+      query: vi.fn(async () => [{ id: 7, url: "https://www.youtube.com/feed/subscriptions" }]),
+      sendMessage: vi.fn(async () => ({ ok: false, message: "Open a YouTube video first." })),
+    } as unknown as typeof chrome.tabs;
+
+    await createPopupTabs({ tabs, setStatus }).generate();
+
+    expect(setStatus).toHaveBeenLastCalledWith("Open a YouTube video first.");
+  });
 });

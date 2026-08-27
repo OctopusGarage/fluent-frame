@@ -116,4 +116,33 @@ describe("VideoLearningSession", () => {
 
     expect(ui.setResult).not.toHaveBeenCalledWith(result, expect.any(String));
   });
+
+  it("cancels active generation when navigating away from video pages", () => {
+    const ui = createUi();
+    let currentVideoId: string | undefined = "dQw4w9WgXcQ";
+    const disconnect = vi.fn();
+    let handlers: { onDisconnect(): void } | undefined;
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: {
+        start(_videoId, nextHandlers) {
+          handlers = nextHandlers;
+          return { disconnect };
+        },
+      },
+      ui,
+      currentVideoId: () => currentVideoId,
+      reconcilePlayerUi: vi.fn(),
+    });
+
+    session.start("dQw4w9WgXcQ");
+    currentVideoId = undefined;
+    session.handleNavigation(undefined);
+    handlers?.onDisconnect();
+
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(ui.setError).not.toHaveBeenCalledWith("Local helper disconnected before generation finished.");
+    expect(ui.clearResult).toHaveBeenLastCalledWith("Ready");
+  });
 });

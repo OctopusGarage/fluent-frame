@@ -29,11 +29,26 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
 
+function parseTimestamp(value: unknown, message: string): string {
+  const timestamp = parseNonEmptyString(value, message);
+  if (!Number.isFinite(Date.parse(timestamp))) {
+    throw new Error(message);
+  }
+  return timestamp;
+}
+
 function parseOptionalString(value: unknown, message: string): string | undefined {
   if (value === undefined) {
     return undefined;
   }
   return parseNonEmptyString(value, message);
+}
+
+function parseOptionalTimestamp(value: unknown, message: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return parseTimestamp(value, message);
 }
 
 function parseOptionalNonNegativeNumber(value: unknown, message: string): number | undefined {
@@ -64,8 +79,8 @@ export function parseQueueJob(value: unknown, message = "Invalid queue job"): Qu
   try {
     const url = parseOptionalString(value.url, message);
     const title = parseOptionalString(value.title, message);
-    const startedAt = parseOptionalString(value.startedAt, message);
-    const finishedAt = parseOptionalString(value.finishedAt, message);
+    const startedAt = parseOptionalTimestamp(value.startedAt, message);
+    const finishedAt = parseOptionalTimestamp(value.finishedAt, message);
     const error = parseOptionalString(value.error, message);
     const completedBatches = parseOptionalNonNegativeNumber(value.completedBatches, message);
     const totalBatches = parseOptionalNonNegativeNumber(value.totalBatches, message);
@@ -77,8 +92,8 @@ export function parseQueueJob(value: unknown, message = "Invalid queue job"): Qu
       captionLanguage: parseCaptionLanguage(value.captionLanguage),
       workflowVersion: parseNonEmptyString(value.workflowVersion, message),
       status,
-      createdAt: parseNonEmptyString(value.createdAt, message),
-      updatedAt: parseNonEmptyString(value.updatedAt, message),
+      createdAt: parseTimestamp(value.createdAt, message),
+      updatedAt: parseTimestamp(value.updatedAt, message),
       ...(startedAt ? { startedAt } : {}),
       ...(finishedAt ? { finishedAt } : {}),
       ...(completedBatches !== undefined ? { completedBatches } : {}),
