@@ -11,3 +11,10 @@ export function parseCaptionLanguage(value: unknown): string {
   }
   return value;
 }
+
+export function parseNonEmptyString(value: unknown, message: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(message);
+  }
+  return value;
+}
