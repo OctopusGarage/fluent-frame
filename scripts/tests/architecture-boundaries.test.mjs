@@ -153,7 +153,7 @@ function collectRuntimeSourceClosure(entryFile) {
 function findNamedExports(source, names) {
   const exportedNames = [];
 
-  for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
+  for (const match of source.matchAll(/export\s+(?:type\s+)?\{([^}]+)\}/g)) {
     const exportList = match[1];
     for (const exportEntry of exportList.split(",")) {
       const [localName, exportedAlias] = exportEntry
@@ -182,7 +182,7 @@ function findNamedExports(source, names) {
 function findExportedDeclarationNames(source) {
   const exportedNames = [];
 
-  for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
+  for (const match of source.matchAll(/export\s+(?:type\s+)?\{([^}]+)\}/g)) {
     for (const exportEntry of match[1].split(",")) {
       const [localName, exportedAlias] = exportEntry
         .trim()
@@ -233,6 +233,10 @@ test("named export scanner catches forbidden direct declarations", () => {
     findNamedExports("export function createRequestId() {}", ["createRequestId"]),
     ["createRequestId"],
   );
+});
+
+test("export scanner catches type-only named re-exports", () => {
+  assert.deepEqual(findExportedDeclarationNames("export type { ContentScriptRuntime };"), ["ContentScriptRuntime"]);
 });
 
 test("workspace package manifests keep app dependencies one-way through shared", () => {
@@ -360,6 +364,13 @@ test("extension native client does not re-export request-id helpers", () => {
   ];
 
   assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension content script entrypoint exposes only the bootstrap boundary", () => {
+  const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
+  const source = readFileSync(contentPath, "utf8");
+
+  assert.deepEqual(findExportedDeclarationNames(source), ["ContentScriptRuntime", "bootstrapContentScript"]);
 });
 
 test("extension content script runtime graph keeps shared protocol imports type-only", () => {
