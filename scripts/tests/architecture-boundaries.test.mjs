@@ -6,36 +6,51 @@ import { join, relative, resolve, sep } from "node:path";
 
 const repoRoot = resolve(import.meta.dirname, "..", "..");
 
+const sharedBoundaryForbiddenSpecifiers = [
+  /^@fluent-frame\/(?:extension|native-host)(?:\/|$)/,
+  /^apps\//,
+];
+const extensionBoundaryForbiddenSpecifiers = [
+  /^@fluent-frame\/native-host(?:\/|$)/,
+  /(?:^|\/)apps\/native-host(?:\/|$)/,
+  /(?:^|\/)packages\/shared\/src(?:\/|$)/,
+];
+const nativeHostBoundaryForbiddenSpecifiers = [
+  /^@fluent-frame\/extension(?:\/|$)/,
+  /(?:^|\/)apps\/extension(?:\/|$)/,
+  /(?:^|\/)packages\/shared\/src(?:\/|$)/,
+];
+
 const sourceRoots = [
   {
     name: "shared",
     path: resolve(repoRoot, "packages/shared/src"),
-    forbiddenSpecifiers: [/^@fluent-frame\/(?:extension|native-host)(?:\/|$)/, /^apps\//],
+    forbiddenSpecifiers: sharedBoundaryForbiddenSpecifiers,
   },
   {
     name: "shared tests",
     path: resolve(repoRoot, "packages/shared/tests"),
-    forbiddenSpecifiers: [/^@fluent-frame\/(?:extension|native-host)(?:\/|$)/, /^apps\//],
+    forbiddenSpecifiers: sharedBoundaryForbiddenSpecifiers,
   },
   {
     name: "extension",
     path: resolve(repoRoot, "apps/extension/src"),
-    forbiddenSpecifiers: [/^@fluent-frame\/native-host(?:\/|$)/, /(?:^|\/)apps\/native-host(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: extensionBoundaryForbiddenSpecifiers,
   },
   {
     name: "extension tests",
     path: resolve(repoRoot, "apps/extension/tests"),
-    forbiddenSpecifiers: [/^@fluent-frame\/native-host(?:\/|$)/, /(?:^|\/)apps\/native-host(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: extensionBoundaryForbiddenSpecifiers,
   },
   {
     name: "native host",
     path: resolve(repoRoot, "apps/native-host/src"),
-    forbiddenSpecifiers: [/^@fluent-frame\/extension(?:\/|$)/, /(?:^|\/)apps\/extension(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: nativeHostBoundaryForbiddenSpecifiers,
   },
   {
     name: "native host tests",
     path: resolve(repoRoot, "apps/native-host/tests"),
-    forbiddenSpecifiers: [/^@fluent-frame\/extension(?:\/|$)/, /(?:^|\/)apps\/extension(?:\/|$)/, /(?:^|\/)packages\/shared\/src(?:\/|$)/],
+    forbiddenSpecifiers: nativeHostBoundaryForbiddenSpecifiers,
   },
 ];
 
@@ -153,7 +168,7 @@ function collectRuntimeSourceClosure(entryFile) {
 function findNamedExports(source, names) {
   const exportedNames = [];
 
-  for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
+  for (const match of source.matchAll(/export\s+(?:type\s+)?\{([^}]+)\}/g)) {
     const exportList = match[1];
     for (const exportEntry of exportList.split(",")) {
       const [localName, exportedAlias] = exportEntry
@@ -182,7 +197,7 @@ function findNamedExports(source, names) {
 function findExportedDeclarationNames(source) {
   const exportedNames = [];
 
-  for (const match of source.matchAll(/export\s+\{([^}]+)\}/g)) {
+  for (const match of source.matchAll(/export\s+(?:type\s+)?\{([^}]+)\}/g)) {
     for (const exportEntry of match[1].split(",")) {
       const [localName, exportedAlias] = exportEntry
         .trim()
@@ -233,6 +248,10 @@ test("named export scanner catches forbidden direct declarations", () => {
     findNamedExports("export function createRequestId() {}", ["createRequestId"]),
     ["createRequestId"],
   );
+});
+
+test("export scanner catches type-only named re-exports", () => {
+  assert.deepEqual(findExportedDeclarationNames("export type { ContentScriptRuntime };"), ["ContentScriptRuntime"]);
 });
 
 test("workspace package manifests keep app dependencies one-way through shared", () => {
@@ -362,6 +381,13 @@ test("extension native client does not re-export request-id helpers", () => {
   assert.deepEqual(forbiddenReExports, []);
 });
 
+test("extension content script entrypoint exposes only the bootstrap boundary", () => {
+  const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
+  const source = readFileSync(contentPath, "utf8");
+
+  assert.deepEqual(findExportedDeclarationNames(source), ["ContentScriptRuntime", "bootstrapContentScript"]);
+});
+
 test("extension content script runtime graph keeps shared protocol imports type-only", () => {
   const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
   const violations = [];
@@ -410,4 +436,12 @@ test("shared caption language parser has one runtime owner", () => {
     .map((filePath) => relative(repoRoot, filePath));
 
   assert.deepEqual(owners, ["packages/shared/src/protocolScalars.ts"]);
+});
+
+test("e2e native host manifests use the shared host name owner", () => {
+  const helpersPath = resolve(repoRoot, "e2e/helpers.ts");
+  const source = readFileSync(helpersPath, "utf8");
+
+  assert.match(source, /import\s+\{\s*NATIVE_HOST_NAME\s*\}\s+from\s+["']\.\.\/packages\/shared\/dist\/index\.js["']/);
+  assert.doesNotMatch(source, /NATIVE_HOST_NAME\s*=\s*["']com\.octopusgarage\.fluent_frame["']/);
 });

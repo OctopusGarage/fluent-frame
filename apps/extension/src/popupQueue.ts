@@ -66,6 +66,19 @@ function runningJobText(job: QueueJob): string {
   return `Generating: ${label} - preparing batches - ${formatRelativeTime(job.updatedAt)}`;
 }
 
+function timestampMs(job: QueueJob): number {
+  const createdMs = Date.parse(job.createdAt);
+  if (Number.isFinite(createdMs)) {
+    return createdMs;
+  }
+  const updatedMs = Date.parse(job.updatedAt);
+  return Number.isFinite(updatedMs) ? updatedMs : 0;
+}
+
+function latestJobsFirst(jobs: QueueJob[]): QueueJob[] {
+  return [...jobs].sort((left, right) => timestampMs(right) - timestampMs(left));
+}
+
 export function createPopupQueue(deps: PopupQueueDeps) {
   async function refresh(options: { preserveStatusOnFailure?: boolean } = {}): Promise<void> {
     try {
@@ -116,7 +129,7 @@ export function createPopupQueue(deps: PopupQueueDeps) {
     const runningJob = queue.jobs.find((job) => job.status === "running");
     running.textContent = runningJob ? runningJobText(runningJob) : "No active generation";
     list.replaceChildren(
-      ...queue.jobs.slice(0, 8).map((job) => {
+      ...latestJobsFirst(queue.jobs).slice(0, 8).map((job) => {
         const item = deps.doc.createElement("article");
         const text = deps.doc.createElement("div");
         const title = deps.doc.createElement("div");

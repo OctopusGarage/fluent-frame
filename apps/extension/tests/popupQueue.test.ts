@@ -161,4 +161,25 @@ describe("createPopupQueue", () => {
 
     expect(setStatus).toHaveBeenLastCalledWith("Queued");
   });
+
+  it("renders the latest queued videos at the top", () => {
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage: vi.fn() },
+      openTab: vi.fn(),
+      setStatus: vi.fn(),
+    });
+
+    popupQueue.render(queue([
+      job({ id: "oldest", videoId: "oldestVideo", title: "Oldest", createdAt: "2026-07-21T00:00:00.000Z" }),
+      job({ id: "newest", videoId: "newestVideo", title: "Newest", createdAt: "2026-07-21T00:02:00.000Z" }),
+      job({ id: "middle", videoId: "middleVideo", title: "Middle", createdAt: "2026-07-21T00:01:00.000Z" }),
+    ]));
+
+    expect(Array.from(document.querySelectorAll<HTMLElement>(".queue-job-title")).map((item) => item.textContent)).toEqual([
+      "Newest",
+      "Middle",
+      "Oldest",
+    ]);
+  });
 });

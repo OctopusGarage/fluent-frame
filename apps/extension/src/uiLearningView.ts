@@ -25,6 +25,7 @@ export type UiLearningViewDeps = {
   writeClipboard(text: string): Promise<void>;
   setStatus(message: string): void;
   setProgress(message?: string): void;
+  applySubtitleLanguageMode(): void;
 };
 
 export function createUiLearningView(deps: UiLearningViewDeps): UiLearningView {
@@ -86,6 +87,7 @@ export function createUiLearningView(deps: UiLearningViewDeps): UiLearningView {
       return;
     }
     videoNow.replaceChildren(...phrases.map((phrase) => renderVideoNowCard(deps.doc, phrase)));
+    deps.applySubtitleLanguageMode();
   }
 
   function renderCurrentLearningEvents(currentMs: number): void {

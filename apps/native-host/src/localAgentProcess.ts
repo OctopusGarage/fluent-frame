@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-const AGENT_TIMEOUT_MS = 120_000;
+const AGENT_TIMEOUT_MS = 300_000;
 
 function runAgentProcess(
   executablePath: string,
