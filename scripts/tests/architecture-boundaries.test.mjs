@@ -121,6 +121,11 @@ function hasReExportFrom(source, specifier) {
   return new RegExp(`export\\s+[^;]*from\\s+["']${escapesForRegex(specifier)}["']`).test(source);
 }
 
+function findExportedStringConst(source, name) {
+  const match = source.match(new RegExp(`export\\s+const\\s+${escapesForRegex(name)}\\s*=\\s*["']([^"']+)["']`));
+  return match?.[1];
+}
+
 function findRuntimeImportSpecifiers(source) {
   return [...source.matchAll(/import\s+(?!type\b)(?:[^"'()]*?\s+from\s+)?["']([^"']+)["']/g)].map((match) => match[1]);
 }
@@ -444,6 +449,18 @@ test("e2e native host manifests use the shared host name owner", () => {
 
   assert.match(source, /import\s+\{\s*NATIVE_HOST_NAME\s*\}\s+from\s+["']\.\.\/packages\/shared\/dist\/index\.js["']/);
   assert.doesNotMatch(source, /NATIVE_HOST_NAME\s*=\s*["']com\.octopusgarage\.fluent_frame["']/);
+});
+
+test("local setup scripts keep their startup-safe native host name copy aligned with shared", () => {
+  const sharedProtocolPath = resolve(repoRoot, "packages/shared/src/protocol.ts");
+  const localCommonPath = resolve(repoRoot, "scripts/local-common.mjs");
+  const sharedSource = readFileSync(sharedProtocolPath, "utf8");
+  const localCommonSource = readFileSync(localCommonPath, "utf8");
+
+  assert.equal(
+    findExportedStringConst(localCommonSource, "nativeHostName"),
+    findExportedStringConst(sharedSource, "NATIVE_HOST_NAME"),
+  );
 });
 
 test("native host generation callers assemble runtime dependencies only through the video processing pipeline", () => {
