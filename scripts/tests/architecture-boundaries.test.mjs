@@ -445,3 +445,38 @@ test("e2e native host manifests use the shared host name owner", () => {
   assert.match(source, /import\s+\{\s*NATIVE_HOST_NAME\s*\}\s+from\s+["']\.\.\/packages\/shared\/dist\/index\.js["']/);
   assert.doesNotMatch(source, /NATIVE_HOST_NAME\s*=\s*["']com\.octopusgarage\.fluent_frame["']/);
 });
+
+test("native host generation callers assemble runtime dependencies only through the video processing pipeline", () => {
+  const generationCallerPaths = [
+    resolve(repoRoot, "apps/native-host/src/processVideoRequestHandler.ts"),
+    resolve(repoRoot, "apps/native-host/src/queueProcessor.ts"),
+  ];
+  const allowedGenerationBoundary = "./videoProcessingPipeline.js";
+  const forbiddenGenerationInternals = new Set([
+    "./agentRunner.js",
+    "./cacheBackfill.js",
+    "./captionCache.js",
+    "./captionDownloader.js",
+    "./processor.js",
+    "./remoteCache.js",
+  ]);
+  const violations = [];
+
+  for (const filePath of generationCallerPaths) {
+    const source = readFileSync(filePath, "utf8");
+    const displayPath = relative(repoRoot, filePath);
+    const localRuntimeSpecifiers = findRuntimeImportSpecifiers(source).filter((specifier) => specifier.startsWith("."));
+
+    if (!localRuntimeSpecifiers.includes(allowedGenerationBoundary)) {
+      violations.push(`${displayPath} does not import runtime boundary ${allowedGenerationBoundary}`);
+    }
+
+    for (const specifier of localRuntimeSpecifiers) {
+      if (forbiddenGenerationInternals.has(specifier)) {
+        violations.push(`${displayPath} imports generation runtime internal ${specifier}`);
+      }
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
