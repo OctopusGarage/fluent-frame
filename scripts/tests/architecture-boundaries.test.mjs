@@ -70,6 +70,7 @@ const packageBoundaries = [
 ];
 
 const operationalScriptRoot = resolve(repoRoot, "scripts");
+const docsRoot = resolve(repoRoot, "docs");
 
 function listSourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -472,6 +473,13 @@ test("local setup scripts keep their startup-safe native host name copy aligned 
     findExportedStringConst(localCommonSource, "nativeHostName"),
     findExportedStringConst(sharedSource, "NATIVE_HOST_NAME"),
   );
+});
+
+test("published docs do not keep generated architecture slice reports", () => {
+  const generatedReports = listFilesOneLevel(docsRoot, /^architecture-slice-\d+-report\.md$/)
+    .map((filePath) => relative(repoRoot, filePath));
+
+  assert.deepEqual(generatedReports, []);
 });
 
 test("native host generation callers assemble runtime dependencies only through the video processing pipeline", () => {
