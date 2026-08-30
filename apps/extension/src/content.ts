@@ -89,6 +89,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   bootstrapWindow.__fluentFrameBootstrapped = true;
 
   const page = createYouTubePage(doc);
+  let lastMarkedVideoMetadataKey = "";
 
   doc.addEventListener("contextmenu", (event) => {
     const target = event.target;
@@ -142,13 +143,27 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     }
   }
 
-  function markVideoWatched(videoId: string, captionLanguage: string): void {
+  function markVideoWatched(videoId: string, captionLanguage: string, title?: string): void {
     try {
-      const title = doc.title.trim();
-      runtime.sendMessage({ type: "markCachedVideoWatched", videoId, captionLanguage, ...(title ? { title } : {}) }, () => {});
+      const normalizedTitle = cleanTitle(title ?? doc.title);
+      runtime.sendMessage({ type: "markCachedVideoWatched", videoId, captionLanguage, ...(normalizedTitle ? { title: normalizedTitle } : {}) }, () => {});
     } catch {
       // Watch metadata is best-effort and must not interrupt subtitle playback.
     }
+  }
+
+  function markCurrentVideoMetadata(): void {
+    const videoId = page.currentVideoId();
+    const title = cleanTitle(doc.title);
+    if (!videoId || !title) {
+      return;
+    }
+    const key = `${videoId}:en:${title}`;
+    if (key === lastMarkedVideoMetadataKey) {
+      return;
+    }
+    lastMarkedVideoMetadataKey = key;
+    markVideoWatched(videoId, "en", title);
   }
 
   const ui = createCoachUi(doc, {
@@ -293,6 +308,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   function startNavigationLoop(): void {
     win.setInterval(() => {
       session.handleNavigation(page.currentVideoId());
+      markCurrentVideoMetadata();
     }, 500);
   }
 
@@ -300,6 +316,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   bindPopupMessageListener();
   startPlayerObserver();
   startSyncLoop();
+  markCurrentVideoMetadata();
   startNavigationLoop();
 }
 

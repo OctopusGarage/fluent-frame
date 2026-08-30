@@ -762,6 +762,33 @@ describe("bootstrapContentScript", () => {
     ]);
   });
 
+  it("updates cached video title metadata when opening a YouTube video", () => {
+    document.title = "Readable video title - YouTube";
+    const runtime = createRuntime(undefined);
+    let navigationLoop: (() => void) | undefined;
+    const win = {
+      setInterval: vi.fn((callback: () => void, ms?: number) => {
+        if (ms === 500) {
+          navigationLoop = callback;
+        }
+        return 1;
+      }),
+    } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime);
+    navigationLoop?.();
+    navigationLoop?.();
+
+    expect(watchedVideoMessages(runtime)).toEqual([
+      {
+        type: "markCachedVideoWatched",
+        videoId: "dQw4w9WgXcQ",
+        captionLanguage: "en",
+        title: "Readable video title - YouTube",
+      },
+    ]);
+  });
+
   it("ignores a response when the page has moved to another video", () => {
     let callback: ((response: unknown) => void) | undefined;
     const runtime = {
