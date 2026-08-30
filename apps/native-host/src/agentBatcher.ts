@@ -3,6 +3,7 @@ import type { AgentOutput, AgentRunner, AgentRunnerOptions } from "./agentTypes.
 import type { LocalAgentAdapter } from "./localAgentAdapter.js";
 
 const MAX_CUES_PER_AGENT_BATCH = 20;
+const MAX_AGENT_BATCH_ATTEMPTS = 2;
 
 function msToSrtTime(value: number): string {
   const hours = Math.floor(value / 3_600_000);
@@ -130,12 +131,34 @@ function buildPrompt(promptTemplate: string, preparedCaptionText: string, instru
   return `${promptTemplate}\n\n<SRT_INPUT>\n${preparedCaptionText}\n</SRT_INPUT>\n`;
 }
 
+function shouldRetryAgentError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return !/(CLI not found|ENOENT|EACCES|permission denied)/i.test(message);
+}
+
+async function runPreparedBatchWithRetry(runBatch: () => Promise<AgentOutput>): Promise<AgentOutput> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_AGENT_BATCH_ATTEMPTS; attempt += 1) {
+    try {
+      return await runBatch();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= MAX_AGENT_BATCH_ATTEMPTS || !shouldRetryAgentError(error)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
+
 export function createBatchedAgentRunner(adapter: LocalAgentAdapter, promptTemplate: string, instruction = ""): AgentRunner {
   return async (captionText: string, options?: AgentRunnerOptions) => {
     return runAgentOverCaptionBatches(captionText, async (preparedCaptionText) => {
-      return adapter.runPreparedBatch({
-        prompt: buildPrompt(promptTemplate, preparedCaptionText, instruction),
-        workingDirectoryPrefix: `ff-${adapter.name}-`,
+      return runPreparedBatchWithRetry(() => {
+        return adapter.runPreparedBatch({
+          prompt: buildPrompt(promptTemplate, preparedCaptionText, instruction),
+          workingDirectoryPrefix: `ff-${adapter.name}-`,
+        });
       });
     }, options);
   };

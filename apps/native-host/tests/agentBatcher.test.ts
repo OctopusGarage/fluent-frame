@@ -16,6 +16,52 @@ function makeSrt(cueCount: number): string {
 }
 
 describe("createBatchedAgentRunner", () => {
+  it("retries a transient failed batch before failing long caption processing", async () => {
+    const processedCueIds: number[] = [];
+    const completedBatches: number[] = [];
+    const attemptsByCueId = new Map<number, number>();
+    const adapter: LocalAgentAdapter = {
+      name: "codex",
+      async runPreparedBatch(batch) {
+        const ids = [...batch.prompt.matchAll(/\n(\d+)\n\d{2}:\d{2}:\d{2},\d{3} -->/g)].map((match) => Number(match[1]));
+        const cueId = ids[0]!;
+        processedCueIds.push(cueId);
+        const attempts = (attemptsByCueId.get(cueId) ?? 0) + 1;
+        attemptsByCueId.set(cueId, attempts);
+        if (cueId === 21 && attempts === 1) {
+          throw new Error("Codex timed out after 300 seconds");
+        }
+        return {
+          subtitles: [{ id: cueId, startMs: 0, endMs: 1000, english: `Line ${cueId}.`, chinese: `第${cueId}句。`, phraseIds: [`p${cueId}`] }],
+          phrases: [
+            {
+              id: `p${cueId}`,
+              cueId,
+              phrase: `line ${cueId}`,
+              meaningZh: `第${cueId}句`,
+              explanationEn: "A retried sentence.",
+              difficulty: "basic",
+            },
+          ],
+        };
+      },
+    };
+    const runAgent = createBatchedAgentRunner(adapter, "Prompt");
+
+    const output = await runAgent(makeSrt(45), {
+      onBatch(progress) {
+        completedBatches.push(progress.completedBatches);
+      },
+    });
+
+    expect(processedCueIds).toEqual([1, 21, 21, 41]);
+    expect(completedBatches).toEqual([1, 2, 3]);
+    expect(output.subtitles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 21, chinese: "第21句。" }),
+      expect.objectContaining({ id: 41, chinese: "第41句。" }),
+    ]));
+  });
+
   it("resumes long caption processing from the next unfinished batch", async () => {
     const processedCueIds: number[] = [];
     const adapter: LocalAgentAdapter = {
