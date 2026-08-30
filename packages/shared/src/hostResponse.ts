@@ -44,10 +44,14 @@ function parseCachedVideos(value: unknown): Extract<HostResponse, { type: "cache
     const lastWatchedAt = item.lastWatchedAt === undefined
       ? undefined
       : parseIsoTimestamp(item.lastWatchedAt, "Invalid native host response");
+    const title = item.title === undefined
+      ? undefined
+      : parseNonEmptyString(item.title, "Invalid native host response");
     const subtitleCount = parseRequiredNonNegativeNumber(item.subtitleCount, "Invalid native host response");
     const phraseCount = parseRequiredNonNegativeNumber(item.phraseCount, "Invalid native host response");
     return {
       videoId: parseYoutubeVideoId(item.videoId),
+      ...(title ? { title } : {}),
       captionLanguage: parseCaptionLanguage(item.captionLanguage),
       workflowVersion: parseNonEmptyString(item.workflowVersion, "Invalid native host response"),
       generatedAt: parseIsoTimestamp(item.generatedAt, "Invalid native host response"),

@@ -537,6 +537,7 @@ describe("parseHostResponse", () => {
       videos: [
         {
           videoId: "dQw4w9WgXcQ",
+          title: "Never Gonna Give You Up",
           captionLanguage: "en",
           workflowVersion: WORKFLOW_VERSION,
           generatedAt: "2026-07-21T00:00:00.000Z",
@@ -553,6 +554,7 @@ describe("parseHostResponse", () => {
       videos: [
         {
           videoId: "dQw4w9WgXcQ",
+          title: "Never Gonna Give You Up",
           captionLanguage: "en",
           workflowVersion: WORKFLOW_VERSION,
           generatedAt: "2026-07-21T00:00:00.000Z",
