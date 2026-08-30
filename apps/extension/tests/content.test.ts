@@ -64,6 +64,12 @@ function rememberContextMenuMessages(runtime: { sendMessage: { mock: { calls: un
   });
 }
 
+function watchedVideoMessages(runtime: { sendMessage: { mock: { calls: unknown[][] } } }): unknown[] {
+  return runtime.sendMessage.mock.calls.map((call) => call[0]).filter((message) => {
+    return (message as { type?: string }).type === "markCachedVideoWatched";
+  });
+}
+
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -708,6 +714,9 @@ describe("bootstrapContentScript", () => {
           callback({ id: "notes-1", ok: true, type: "personalNotes", notes: [] });
           return;
         }
+        if ((_message as { type?: string }).type === "markCachedVideoWatched") {
+          return;
+        }
         callbacks.push(callback);
       }),
     } satisfies ContentScriptRuntime;
@@ -735,6 +744,22 @@ describe("bootstrapContentScript", () => {
     callbacks[1]?.({ id: "request-2", ok: true, type: "result", result: newerResult });
     syncLoop?.();
     expect(document.body.textContent).toContain("New line.");
+  });
+
+  it("marks subtitle results watched when they are shown on the current video", () => {
+    const runtime = createRuntime();
+    const win = { setInterval: vi.fn() } as unknown as Window;
+
+    bootstrapContentScript(document, win, runtime);
+    document.getElementById("ff-generate")?.click();
+
+    expect(watchedVideoMessages(runtime)).toEqual([
+      {
+        type: "markCachedVideoWatched",
+        videoId: "dQw4w9WgXcQ",
+        captionLanguage: "en",
+      },
+    ]);
   });
 
   it("ignores a response when the page has moved to another video", () => {

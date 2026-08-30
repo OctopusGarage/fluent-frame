@@ -66,6 +66,17 @@ export type PersonalNote = {
   savedAt: string;
 };
 
+export type CachedVideoSummary = {
+  videoId: string;
+  captionLanguage: string;
+  workflowVersion: string;
+  generatedAt: string;
+  lastWatchedAt?: string;
+  sortAt: string;
+  subtitleCount: number;
+  phraseCount: number;
+};
+
 export type AgentName = "codex" | "claude";
 
 export type HostHealth = {
@@ -112,7 +123,9 @@ export type HostProgress = {
 export type HostRequest =
   | { id: string; type: "getStatus" }
   | { id: string; type: "healthCheck" }
+  | { id: string; type: "listCachedVideos" }
   | { id: string; type: "getCachedVideo"; videoId: string; captionLanguage: string }
+  | { id: string; type: "markCachedVideoWatched"; videoId: string; captionLanguage: string }
   | { id: string; type: "processVideo"; videoId: string; captionLanguage: string; stream?: boolean }
   | { id: string; type: "clearVideoCache"; videoId: string; captionLanguage: string }
   | { id: string; type: "enqueueVideo"; videoId: string; captionLanguage: string; url?: string; title?: string }
@@ -138,6 +151,8 @@ export type HostResponse =
     }
   | { id: string; ok: true; type: "personalNotes"; notes: PersonalNote[] }
   | { id: string; ok: true; type: "personalNotesSaved" }
+  | { id: string; ok: true; type: "cachedVideos"; videos: CachedVideoSummary[] }
+  | { id: string; ok: true; type: "cachedVideoWatched" }
   | { id: string; ok: true; type: "queue"; queue: QueueState }
   | { id: string; ok: true; type: "queueJob"; job: QueueJob; message: string }
   | { id: string; ok: true; type: "cacheMiss" }
@@ -187,6 +202,9 @@ export function parseHostRequest(value: unknown): HostRequest {
   if (raw.type === "getQueue") {
     return { id, type: "getQueue" };
   }
+  if (raw.type === "listCachedVideos") {
+    return { id, type: "listCachedVideos" };
+  }
   if (raw.type === "savePersonalNotes") {
     return { id, type: "savePersonalNotes", notes: parsePersonalNotes(raw.notes) };
   }
@@ -212,6 +230,14 @@ export function parseHostRequest(value: unknown): HostRequest {
     return {
       id,
       type: "getCachedVideo",
+      videoId: parseYoutubeVideoId(raw.videoId),
+      captionLanguage: parseCaptionLanguage(raw.captionLanguage),
+    };
+  }
+  if (raw.type === "markCachedVideoWatched") {
+    return {
+      id,
+      type: "markCachedVideoWatched",
       videoId: parseYoutubeVideoId(raw.videoId),
       captionLanguage: parseCaptionLanguage(raw.captionLanguage),
     };

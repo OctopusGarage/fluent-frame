@@ -1,7 +1,7 @@
 import { isValidLearningSubtitleResult } from "./resultValidation.js";
 import type { HostHealth, HostProgress, HostResponse } from "./protocol.js";
 import { parsePersonalNotes } from "./personalNotes.js";
-import { parseNonEmptyString } from "./protocolScalars.js";
+import { parseCaptionLanguage, parseNonEmptyString, parseYoutubeVideoId } from "./protocolScalars.js";
 import { parseQueueJob, parseQueueState } from "./queue.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -24,6 +24,39 @@ function parseRequiredNonNegativeNumber(value: unknown, message: string): number
     throw new Error(message);
   }
   return parsed;
+}
+
+function parseIsoTimestamp(value: unknown, message: string): string {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) {
+    throw new Error(message);
+  }
+  return value;
+}
+
+function parseCachedVideos(value: unknown): Extract<HostResponse, { type: "cachedVideos" }>["videos"] {
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid native host response");
+  }
+  return value.map((item) => {
+    if (!isObject(item)) {
+      throw new Error("Invalid native host response");
+    }
+    const lastWatchedAt = item.lastWatchedAt === undefined
+      ? undefined
+      : parseIsoTimestamp(item.lastWatchedAt, "Invalid native host response");
+    const subtitleCount = parseRequiredNonNegativeNumber(item.subtitleCount, "Invalid native host response");
+    const phraseCount = parseRequiredNonNegativeNumber(item.phraseCount, "Invalid native host response");
+    return {
+      videoId: parseYoutubeVideoId(item.videoId),
+      captionLanguage: parseCaptionLanguage(item.captionLanguage),
+      workflowVersion: parseNonEmptyString(item.workflowVersion, "Invalid native host response"),
+      generatedAt: parseIsoTimestamp(item.generatedAt, "Invalid native host response"),
+      ...(lastWatchedAt ? { lastWatchedAt } : {}),
+      sortAt: parseIsoTimestamp(item.sortAt, "Invalid native host response"),
+      subtitleCount,
+      phraseCount,
+    };
+  });
 }
 
 function parseProgressCache(value: unknown): HostProgress["cache"] {
@@ -198,13 +231,21 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
   if (response.type === "personalNotes") {
     return { id: expectedId, ok: true, type: "personalNotes", notes: parsePersonalNotes(response.notes) };
   }
+  if (response.type === "cachedVideos") {
+    return { id: expectedId, ok: true, type: "cachedVideos", videos: parseCachedVideos(response.videos) };
+  }
   if (response.type === "queue") {
     return { id: expectedId, ok: true, type: "queue", queue: parseQueueState(response.queue, "Invalid native host response") };
   }
   if (response.type === "queueJob" && typeof response.message === "string") {
     return { id: expectedId, ok: true, type: "queueJob", message: response.message, job: parseQueueJob(response.job, "Invalid native host response") };
   }
-  if (response.type === "personalNotesSaved" || response.type === "cacheMiss" || response.type === "cacheCleared") {
+  if (
+    response.type === "personalNotesSaved" ||
+    response.type === "cacheMiss" ||
+    response.type === "cacheCleared" ||
+    response.type === "cachedVideoWatched"
+  ) {
     return response as HostResponse;
   }
   throw new Error("Invalid native host response");

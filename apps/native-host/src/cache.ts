@@ -1,10 +1,11 @@
-import { readFile, rm } from "node:fs/promises";
+import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   assertAgentOutput,
   assertLearningSubtitleResult,
   WORKFLOW_VERSION,
   type AgentOutput,
+  type CachedVideoSummary,
   type LearningSubtitleResult,
 } from "@fluent-frame/shared";
 import type { AgentBatchProgress } from "./agentTypes.js";
@@ -33,8 +34,45 @@ function partialResultPath(cacheDir: string, videoId: string, captionLanguage: s
   return join(cacheDir, videoId, captionLanguage, WORKFLOW_VERSION, "partial-result.json");
 }
 
+function metadataPath(cacheDir: string, videoId: string, captionLanguage: string): string {
+  return join(cacheDir, videoId, captionLanguage, WORKFLOW_VERSION, "metadata.json");
+}
+
+function isSafePathSegment(value: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+function isSafeCaptionLanguage(value: string): boolean {
+  return /^[a-z]{2,3}(-[A-Za-z0-9]+)?$/.test(value);
+}
+
 function assertCachedResult(value: unknown): asserts value is LearningSubtitleResult {
   assertLearningSubtitleResult(value, INVALID_CACHE_MESSAGE);
+}
+
+function validIsoTimestamp(value: unknown): string | undefined {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
+async function readLastWatchedAt(cacheDir: string, videoId: string, captionLanguage: string): Promise<string | undefined> {
+  try {
+    const content = await readFile(metadataPath(cacheDir, videoId, captionLanguage), "utf8");
+    const parsed = JSON.parse(content) as { lastWatchedAt?: unknown };
+    return validIsoTimestamp(parsed.lastWatchedAt);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function newestTimestamp(...values: Array<string | undefined>): string {
+  const timestamps = values
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => Number.isFinite(Date.parse(value)))
+    .sort((left, right) => Date.parse(right) - Date.parse(left));
+  return timestamps[0] ?? new Date(0).toISOString();
 }
 
 function assertCachedPartialResult(
@@ -117,6 +155,74 @@ export async function readCacheEntry(cacheDir: string, videoId: string, captionL
 export async function writeCachedResult(cacheDir: string, result: LearningSubtitleResult): Promise<void> {
   const path = resultPath(cacheDir, result.videoId, result.sourceLanguage);
   await writeJsonFileAtomically(path, result);
+}
+
+export async function markCachedVideoWatched(
+  cacheDir: string,
+  videoId: string,
+  captionLanguage: string,
+  watchedAt = new Date().toISOString(),
+): Promise<void> {
+  await writeJsonFileAtomically(metadataPath(cacheDir, videoId, captionLanguage), { lastWatchedAt: watchedAt });
+}
+
+export async function listCachedVideoSummaries(cacheDir: string): Promise<CachedVideoSummary[]> {
+  let videoDirs;
+  try {
+    videoDirs = await readdir(cacheDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const summaries: CachedVideoSummary[] = [];
+  for (const videoDir of videoDirs) {
+    if (!videoDir.isDirectory() || !isSafePathSegment(videoDir.name)) {
+      continue;
+    }
+    const videoId = videoDir.name;
+    let languageDirs;
+    try {
+      languageDirs = await readdir(join(cacheDir, videoId), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const languageDir of languageDirs) {
+      if (!languageDir.isDirectory() || !isSafeCaptionLanguage(languageDir.name)) {
+        continue;
+      }
+      const captionLanguage = languageDir.name;
+      const path = resultPath(cacheDir, videoId, captionLanguage);
+      try {
+        const [content, resultStats, lastWatchedAt] = await Promise.all([
+          readFile(path, "utf8"),
+          stat(path),
+          readLastWatchedAt(cacheDir, videoId, captionLanguage),
+        ]);
+        const parsed = JSON.parse(content) as unknown;
+        if (!matchesCacheIdentity(parsed, videoId, captionLanguage, WORKFLOW_VERSION)) {
+          continue;
+        }
+        assertCachedResult(parsed);
+        const sortAt = lastWatchedAt ?? newestTimestamp(parsed.generatedAt, resultStats.mtime.toISOString());
+        summaries.push({
+          videoId,
+          captionLanguage,
+          workflowVersion: parsed.workflowVersion,
+          generatedAt: parsed.generatedAt,
+          ...(lastWatchedAt ? { lastWatchedAt } : {}),
+          sortAt,
+          subtitleCount: parsed.subtitles.length,
+          phraseCount: parsed.phrases.length,
+        });
+      } catch {
+        continue;
+      }
+    }
+  }
+  return summaries.sort((left, right) => Date.parse(right.sortAt) - Date.parse(left.sortAt));
 }
 
 export async function readCachedPartialResult(

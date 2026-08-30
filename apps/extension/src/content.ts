@@ -142,6 +142,14 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     }
   }
 
+  function markVideoWatched(videoId: string, captionLanguage: string): void {
+    try {
+      runtime.sendMessage({ type: "markCachedVideoWatched", videoId, captionLanguage }, () => {});
+    } catch {
+      // Watch metadata is best-effort and must not interrupt subtitle playback.
+    }
+  }
+
   const ui = createCoachUi(doc, {
     notesStore: createNativeNotesStore(runtime),
     onJumpToMs(startMs) {
@@ -190,6 +198,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     generationClient: createRuntimeLearningGenerationClient(runtime),
     ui,
     currentVideoId: page.currentVideoId,
+    markVideoWatched,
     reconcilePlayerUi,
   });
 

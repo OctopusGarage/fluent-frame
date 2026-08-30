@@ -25,6 +25,8 @@ describe("createPopupQueue", () => {
       <div id="queue-summary"></div>
       <div id="queue-running"></div>
       <div id="queue-list"></div>
+      <div id="subtitle-library-summary"></div>
+      <div id="subtitle-library-list"></div>
     `;
     vi.useRealTimers();
   });

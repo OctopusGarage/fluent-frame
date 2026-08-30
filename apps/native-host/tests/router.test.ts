@@ -221,6 +221,51 @@ describe("handleRequest", () => {
     }
   });
 
+  it("lists cached videos and marks a cached video watched through the native host", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-cache-library-"));
+    const previousCacheDir = process.env.FF_CACHE_DIR;
+    process.env.FF_CACHE_DIR = dir;
+    const cachedResult: LearningSubtitleResult = {
+      videoId: "dQw4w9WgXcQ",
+      sourceLanguage: "en",
+      workflowVersion: WORKFLOW_VERSION,
+      generatedAt: "2026-07-21T00:00:00.000Z",
+      subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Cached sentence.", chinese: "缓存句子。", phraseIds: ["p1"] }],
+      phrases: [{ id: "p1", cueId: 1, phrase: "cached sentence", meaningZh: "缓存句子", explanationEn: "A cached result.", difficulty: "basic" }],
+    };
+
+    try {
+      await writeCachedResult(dir, cachedResult);
+      await expect(
+        handleRequest({ id: "watch-cache-1", type: "markCachedVideoWatched", videoId: "dQw4w9WgXcQ", captionLanguage: "en" }),
+      ).resolves.toEqual({
+        id: "watch-cache-1",
+        ok: true,
+        type: "cachedVideoWatched",
+      });
+      await expect(handleRequest({ id: "library1", type: "listCachedVideos" })).resolves.toMatchObject({
+        id: "library1",
+        ok: true,
+        type: "cachedVideos",
+        videos: [
+          {
+            videoId: "dQw4w9WgXcQ",
+            captionLanguage: "en",
+            subtitleCount: 1,
+            phraseCount: 1,
+          },
+        ],
+      });
+    } finally {
+      if (previousCacheDir === undefined) {
+        delete process.env.FF_CACHE_DIR;
+      } else {
+        process.env.FF_CACHE_DIR = previousCacheDir;
+      }
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("returns request-scoped notes errors for corrupted notes files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ff-router-notes-invalid-"));
     const previousNotesFile = process.env.FF_NOTES_FILE;

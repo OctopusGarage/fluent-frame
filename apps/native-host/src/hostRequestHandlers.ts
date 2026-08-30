@@ -22,6 +22,12 @@ const requestHandlers = {
   async getCachedVideo(request, { config }) {
     return createCacheRequestHandler(config).getCachedVideo(request);
   },
+  async listCachedVideos(request, { config }) {
+    return createCacheRequestHandler(config).listCachedVideos(request);
+  },
+  async markCachedVideoWatched(request, { config }) {
+    return createCacheRequestHandler(config).markCachedVideoWatched(request);
+  },
   async getPersonalNotes(request, { config }) {
     return createNotesRequestHandler(config).getPersonalNotes(request);
   },

@@ -1,4 +1,5 @@
 import {
+  parseCaptionLanguage,
   parsePersonalNotes,
   parseQueueJobId,
   parseYoutubeVideoId,
@@ -50,6 +51,25 @@ export function createGetQueueRequest(): HostRequest {
   return {
     id: createRequestId(),
     type: "getQueue",
+  };
+}
+
+export function createListCachedVideosRequest(): HostRequest {
+  return {
+    id: createRequestId(),
+    type: "listCachedVideos",
+  };
+}
+
+export function createMarkCachedVideoWatchedRequest(input: {
+  videoId: unknown;
+  captionLanguage?: unknown;
+}): HostRequest {
+  return {
+    id: createRequestId(),
+    type: "markCachedVideoWatched",
+    videoId: parseYoutubeVideoId(input.videoId),
+    captionLanguage: parseCaptionLanguage(input.captionLanguage ?? "en"),
   };
 }
 

@@ -86,6 +86,23 @@ describe("parseHostRequest", () => {
       videoId: "dQw4w9WgXcQ",
       captionLanguage: "eng",
     });
+
+    expect(parseHostRequest({ id: "cache3", type: "listCachedVideos" })).toEqual({
+      id: "cache3",
+      type: "listCachedVideos",
+    });
+
+    expect(parseHostRequest({
+      id: "cache4",
+      type: "markCachedVideoWatched",
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+    })).toEqual({
+      id: "cache4",
+      type: "markCachedVideoWatched",
+      videoId: "dQw4w9WgXcQ",
+      captionLanguage: "en",
+    });
   });
 
   it("parses personal notes requests", () => {
@@ -505,6 +522,54 @@ describe("parseHostResponse", () => {
       ok: true,
       type: "cacheCleared",
     });
+    expect(parseHostResponse("watched1", { id: "watched1", ok: true, type: "cachedVideoWatched" })).toEqual({
+      id: "watched1",
+      ok: true,
+      type: "cachedVideoWatched",
+    });
+  });
+
+  it("accepts cached video library responses", () => {
+    expect(parseHostResponse("library1", {
+      id: "library1",
+      ok: true,
+      type: "cachedVideos",
+      videos: [
+        {
+          videoId: "dQw4w9WgXcQ",
+          captionLanguage: "en",
+          workflowVersion: WORKFLOW_VERSION,
+          generatedAt: "2026-07-21T00:00:00.000Z",
+          lastWatchedAt: "2026-07-23T00:00:00.000Z",
+          sortAt: "2026-07-23T00:00:00.000Z",
+          subtitleCount: 1,
+          phraseCount: 1,
+        },
+      ],
+    })).toEqual({
+      id: "library1",
+      ok: true,
+      type: "cachedVideos",
+      videos: [
+        {
+          videoId: "dQw4w9WgXcQ",
+          captionLanguage: "en",
+          workflowVersion: WORKFLOW_VERSION,
+          generatedAt: "2026-07-21T00:00:00.000Z",
+          lastWatchedAt: "2026-07-23T00:00:00.000Z",
+          sortAt: "2026-07-23T00:00:00.000Z",
+          subtitleCount: 1,
+          phraseCount: 1,
+        },
+      ],
+    });
+
+    expect(() => parseHostResponse("library2", {
+      id: "library2",
+      ok: true,
+      type: "cachedVideos",
+      videos: [{ videoId: "../bad" }],
+    })).toThrow("Invalid native host response");
   });
 
   it("accepts result responses with processing mode metadata", () => {

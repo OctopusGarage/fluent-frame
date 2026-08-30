@@ -102,24 +102,28 @@
       .queue-card {
         margin-bottom: 12px;
       }
-      .queue-title {
+      .queue-title,
+      .subtitle-library-title-heading {
         margin-bottom: 7px;
         color: #dbeafe;
         font-size: 12px;
         font-weight: 700;
       }
       #queue-summary,
-      #queue-running {
+      #queue-running,
+      #subtitle-library-summary {
         color: #cbd5e1;
         font-size: 12px;
         line-height: 1.4;
       }
-      #queue-list {
+      #queue-list,
+      #subtitle-library-list {
         display: grid;
         gap: 6px;
         margin-top: 8px;
       }
-      .queue-job {
+      .queue-job,
+      .subtitle-library-item {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
@@ -129,10 +133,12 @@
         border-radius: 7px;
         background: rgba(30, 41, 59, 0.46);
       }
-      .queue-job-text {
+      .queue-job-text,
+      .subtitle-library-text {
         min-width: 0;
       }
-      .queue-job-title {
+      .queue-job-title,
+      .subtitle-library-title {
         color: #dbeafe;
         font-size: 12px;
         font-weight: 700;
@@ -141,7 +147,8 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .queue-job-detail {
+      .queue-job-detail,
+      .subtitle-library-detail {
         margin-top: 2px;
         color: #94a3b8;
         font-size: 10px;
@@ -155,6 +162,10 @@
         gap: 4px;
       }
       .queue-job-actions button {
+        padding: 4px 6px;
+        font-size: 11px;
+      }
+      .subtitle-library-item button {
         padding: 4px 6px;
         font-size: 11px;
       }
@@ -204,6 +215,11 @@
       <div id="queue-summary">Loading queue...</div>
       <div id="queue-running">Checking active job...</div>
       <div id="queue-list"></div>
+    </section>
+    <section id="subtitle-library-card" class="status-card" aria-label="Subtitle library">
+      <div class="subtitle-library-title-heading">Subtitle library</div>
+      <div id="subtitle-library-summary">Loading subtitle results...</div>
+      <div id="subtitle-library-list"></div>
     </section>
     <section class="status-card" aria-label="Setup status">
       <div id="native-host" class="health-line">Checking native host...</div>

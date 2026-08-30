@@ -1,5 +1,6 @@
 import type { HostResponse } from "@fluent-frame/shared";
 import { compactHomePath } from "./displayPath.js";
+import { createPopupLibrary } from "./popupLibrary.js";
 import { createPopupQueue } from "./popupQueue.js";
 import { createPopupTabs } from "./popupTabs.js";
 import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
@@ -38,6 +39,15 @@ function setStatus(message: string): void {
 }
 
 const queue = createPopupQueue({
+  doc: document,
+  runtime: chrome.runtime,
+  openTab: async (url) => {
+    await chrome.tabs.create({ url });
+  },
+  setStatus,
+});
+
+const library = createPopupLibrary({
   doc: document,
   runtime: chrome.runtime,
   openTab: async (url) => {
@@ -130,6 +140,8 @@ document.getElementById("refresh-health")?.addEventListener("click", () => {
 
 void refreshHealth();
 void queue.refresh();
+void library.refresh();
 window.setInterval(() => {
   void queue.refresh();
+  void library.refresh({ preserveStatusOnFailure: true });
 }, QUEUE_REFRESH_INTERVAL_MS);

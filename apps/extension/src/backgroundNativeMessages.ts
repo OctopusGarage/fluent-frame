@@ -4,6 +4,8 @@ import {
   createGetPersonalNotesRequest,
   createGetQueueRequest,
   createHealthCheckRequest,
+  createListCachedVideosRequest,
+  createMarkCachedVideoWatchedRequest,
   createProcessVideoRequest,
   createRemoveQueueJobRequest,
   createRetryQueueJobRequest,
@@ -64,6 +66,21 @@ export function registerNativeMessageListener(runtime: NativeMessageRuntime): vo
 
     if (isObject(message) && message.type === "getQueue") {
       return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
+    }
+
+    if (isObject(message) && message.type === "listCachedVideos") {
+      return forwardNativeRequest(runtime, createListCachedVideosRequest(), sendResponse);
+    }
+
+    if (isObject(message) && message.type === "markCachedVideoWatched") {
+      return forwardCreatedNativeRequest(
+        runtime,
+        () => createMarkCachedVideoWatchedRequest({
+          videoId: message.videoId,
+          captionLanguage: message.captionLanguage,
+        }),
+        sendResponse,
+      );
     }
 
     if (isObject(message) && message.type === "enqueueVideo") {

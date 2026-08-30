@@ -24,6 +24,7 @@ export type VideoLearningSessionDeps = {
   generationClient: LearningGenerationClient;
   ui: CoachUi;
   currentVideoId(): string | undefined;
+  markVideoWatched?(videoId: string, captionLanguage: string): void;
   reconcilePlayerUi(): void;
 };
 
@@ -104,6 +105,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
     activeGeneration = undefined;
     const elapsedMs = record(videoId, startedMs, "success");
     deps.ui.setResult(result, `Learning subtitles ready in ${formatDuration(elapsedMs)}`);
+    deps.markVideoWatched?.(result.videoId, result.sourceLanguage);
     deps.reconcilePlayerUi();
   }
 
@@ -116,6 +118,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
       ? `Source subtitles only${detail}`
       : `Partial subtitles saved${detail}`;
     deps.ui.setResult(result, message);
+    deps.markVideoWatched?.(result.videoId, result.sourceLanguage);
     deps.reconcilePlayerUi();
   }
 

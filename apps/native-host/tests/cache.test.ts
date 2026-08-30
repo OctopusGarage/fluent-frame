@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
-import { clearCachedResult, readCachedResult, writeCachedResult } from "../src/cache.js";
+import {
+  clearCachedResult,
+  listCachedVideoSummaries,
+  markCachedVideoWatched,
+  readCachedResult,
+  writeCachedResult,
+} from "../src/cache.js";
 
 let dir = "";
 
@@ -99,5 +105,29 @@ describe("cache", () => {
     await writeRawResult(JSON.stringify({ ...result, videoId: "aaaaaaaaaaa" }));
 
     await expect(readCachedResult(dir, "dQw4w9WgXcQ", "en")).resolves.toBeUndefined();
+  });
+
+  it("lists cached subtitle results by recent watch time", async () => {
+    const older = { ...result, videoId: "aaaaaaaaaaa", generatedAt: "2026-07-20T00:00:00.000Z" };
+    const newer = { ...result, videoId: "bbbbbbbbbbb", generatedAt: "2026-07-21T00:00:00.000Z" };
+    await writeCachedResult(dir, older);
+    await writeCachedResult(dir, newer);
+    await markCachedVideoWatched(dir, "aaaaaaaaaaa", "en", "2026-07-24T00:00:00.000Z");
+    await markCachedVideoWatched(dir, "bbbbbbbbbbb", "en", "2026-07-23T00:00:00.000Z");
+
+    await expect(listCachedVideoSummaries(dir)).resolves.toMatchObject([
+      {
+        videoId: "aaaaaaaaaaa",
+        captionLanguage: "en",
+        lastWatchedAt: "2026-07-24T00:00:00.000Z",
+        subtitleCount: 1,
+        phraseCount: 1,
+      },
+      {
+        videoId: "bbbbbbbbbbb",
+        captionLanguage: "en",
+        lastWatchedAt: "2026-07-23T00:00:00.000Z",
+      },
+    ]);
   });
 });
