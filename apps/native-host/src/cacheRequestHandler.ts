@@ -37,7 +37,7 @@ export function createCacheRequestHandler(config: HostConfig) {
     },
     async markCachedVideoWatched(request: MarkCachedVideoWatchedRequest): Promise<HostResponse> {
       try {
-        await markCachedVideoWatched(config.cacheDir, request.videoId, request.captionLanguage);
+        await markCachedVideoWatched(config.cacheDir, request.videoId, request.captionLanguage, undefined, request.title);
         return { id: request.id, ok: true, type: "cachedVideoWatched" };
       } catch (error) {
         return cacheErrorResponse(request.id, error);

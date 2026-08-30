@@ -64,12 +64,15 @@ export function createListCachedVideosRequest(): HostRequest {
 export function createMarkCachedVideoWatchedRequest(input: {
   videoId: unknown;
   captionLanguage?: unknown;
+  title?: unknown;
 }): HostRequest {
+  const title = optionalNativeText(input.title, "truncate");
   return {
     id: createRequestId(),
     type: "markCachedVideoWatched",
     videoId: parseYoutubeVideoId(input.videoId),
     captionLanguage: parseCaptionLanguage(input.captionLanguage ?? "en"),
+    ...(title ? { title } : {}),
   };
 }
 

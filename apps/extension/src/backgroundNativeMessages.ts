@@ -78,6 +78,7 @@ export function registerNativeMessageListener(runtime: NativeMessageRuntime): vo
         () => createMarkCachedVideoWatchedRequest({
           videoId: message.videoId,
           captionLanguage: message.captionLanguage,
+          title: message.title,
         }),
         sendResponse,
       );

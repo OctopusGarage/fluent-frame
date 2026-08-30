@@ -10,6 +10,7 @@ import { createRemoteCacheProvider } from "./remoteCache.js";
 export type VideoProcessingPipelineInput = {
   videoId: string;
   captionLanguage: string;
+  title?: string;
   onEvent?: (event: ProcessVideoEvent) => Promise<void> | void;
   onPartialResult?: (
     result: LearningSubtitleResult,
@@ -28,6 +29,7 @@ export async function runVideoProcessingPipeline(
   const remoteCache = createRemoteCacheProvider(config.remoteCache);
   return processVideo(input.videoId, input.captionLanguage, {
     cacheDir: config.cacheDir,
+    ...(input.title ? { title: input.title } : {}),
     ...(remoteCache ? { remoteCache } : {}),
     readCachedCaptions: (videoId, captionLanguage) => readCachedCaptions(config.cacheDir, videoId, captionLanguage),
     writeCachedCaptions: (videoId, captionLanguage, captionText) => writeCachedCaptions(config.cacheDir, videoId, captionLanguage, captionText),

@@ -68,6 +68,7 @@ export type PersonalNote = {
 
 export type CachedVideoSummary = {
   videoId: string;
+  title?: string;
   captionLanguage: string;
   workflowVersion: string;
   generatedAt: string;
@@ -125,7 +126,7 @@ export type HostRequest =
   | { id: string; type: "healthCheck" }
   | { id: string; type: "listCachedVideos" }
   | { id: string; type: "getCachedVideo"; videoId: string; captionLanguage: string }
-  | { id: string; type: "markCachedVideoWatched"; videoId: string; captionLanguage: string }
+  | { id: string; type: "markCachedVideoWatched"; videoId: string; captionLanguage: string; title?: string }
   | { id: string; type: "processVideo"; videoId: string; captionLanguage: string; stream?: boolean }
   | { id: string; type: "clearVideoCache"; videoId: string; captionLanguage: string }
   | { id: string; type: "enqueueVideo"; videoId: string; captionLanguage: string; url?: string; title?: string }
@@ -235,11 +236,13 @@ export function parseHostRequest(value: unknown): HostRequest {
     };
   }
   if (raw.type === "markCachedVideoWatched") {
+    const title = parseOptionalText(raw.title, "video title");
     return {
       id,
       type: "markCachedVideoWatched",
       videoId: parseYoutubeVideoId(raw.videoId),
       captionLanguage: parseCaptionLanguage(raw.captionLanguage),
+      ...(title ? { title } : {}),
     };
   }
   if (raw.type === "processVideo") {

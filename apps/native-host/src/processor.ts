@@ -7,6 +7,7 @@ import {
   readCacheEntry,
   writeCachedPartialResult,
   writeCachedResult,
+  writeCachedVideoTitle,
 } from "./cache.js";
 import { prepareCaptionBatches } from "./agentBatcher.js";
 import type { RemoteCacheProvider } from "./remoteCache.js";
@@ -27,6 +28,7 @@ export type ProcessVideoEvent =
 
 export type ProcessVideoDeps = {
   cacheDir: string;
+  title?: string;
   remoteCache?: RemoteCacheProvider;
   readCachedCaptions?: (videoId: string, captionLanguage: string) => Promise<string | undefined>;
   writeCachedCaptions?: (videoId: string, captionLanguage: string, captionText: string) => Promise<void>;
@@ -95,6 +97,7 @@ export async function processVideo(
 ): Promise<ProcessVideoOutput> {
   const cached = await readCacheEntry(deps.cacheDir, videoId, captionLanguage);
   if (cached.status === "hit") {
+    await writeCachedVideoTitle(deps.cacheDir, videoId, captionLanguage, deps.title).catch(() => undefined);
     await deps.onEvent?.({ type: "cacheStatus", localResult: true, remoteResult: false, partialResult: false, cachedBatches: 0 });
     return { result: cached.result, cacheHit: true, mode: "cache" };
   }
@@ -108,6 +111,7 @@ export async function processVideo(
   if (remoteResult) {
     await deps.onEvent?.({ type: "cacheStatus", localResult: false, remoteResult: true, partialResult: false, cachedBatches: 0 });
     await writeCachedResult(deps.cacheDir, remoteResult);
+    await writeCachedVideoTitle(deps.cacheDir, videoId, captionLanguage, deps.title).catch(() => undefined);
     return { result: remoteResult, cacheHit: true, mode: "remoteCache" };
   }
 
@@ -179,6 +183,7 @@ export async function processVideo(
       };
   if (successfulAgentOutput) {
     await writeCachedResult(deps.cacheDir, result);
+    await writeCachedVideoTitle(deps.cacheDir, videoId, captionLanguage, deps.title).catch(() => undefined);
     await clearCachedPartialResult(deps.cacheDir, videoId, captionLanguage).catch(() => undefined);
     await deps.remoteCache?.writeResult(result).catch(() => undefined);
     await deps.backfillRemoteCache?.(result).catch(() => undefined);

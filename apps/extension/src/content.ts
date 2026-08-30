@@ -144,7 +144,8 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
 
   function markVideoWatched(videoId: string, captionLanguage: string): void {
     try {
-      runtime.sendMessage({ type: "markCachedVideoWatched", videoId, captionLanguage }, () => {});
+      const title = doc.title.trim();
+      runtime.sendMessage({ type: "markCachedVideoWatched", videoId, captionLanguage, ...(title ? { title } : {}) }, () => {});
     } catch {
       // Watch metadata is best-effort and must not interrupt subtitle playback.
     }

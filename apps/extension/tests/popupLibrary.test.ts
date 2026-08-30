@@ -62,4 +62,39 @@ describe("createPopupLibrary", () => {
     await Promise.resolve();
     expect(openTab).toHaveBeenCalledWith("https://www.youtube.com/watch?v=newvideo123");
   });
+
+  it("renders every cached video instead of capping the library list", () => {
+    const library = createPopupLibrary({
+      doc: document,
+      runtime: { sendMessage: vi.fn() },
+      openTab: vi.fn(),
+      setStatus: vi.fn(),
+    });
+    const videos = Array.from({ length: 21 }, (_, index) => video({
+      videoId: `video${String(index).padStart(6, "0")}`,
+      sortAt: `2026-07-21T00:${String(index).padStart(2, "0")}:00.000Z`,
+    }));
+
+    library.render(videos);
+
+    expect(document.querySelectorAll(".subtitle-library-item")).toHaveLength(21);
+  });
+
+  it("shows cached video titles instead of raw video IDs", () => {
+    const library = createPopupLibrary({
+      doc: document,
+      runtime: { sendMessage: vi.fn() },
+      openTab: vi.fn(),
+      setStatus: vi.fn(),
+    });
+
+    library.render([
+      video({
+        videoId: "Rm2wShHJ2iA",
+        title: "Gary Lineker: All FIFA World Cup Goals",
+      }),
+    ]);
+
+    expect(document.querySelector<HTMLElement>(".subtitle-library-title")?.textContent).toBe("Gary Lineker: All FIFA World Cup Goals");
+  });
 });

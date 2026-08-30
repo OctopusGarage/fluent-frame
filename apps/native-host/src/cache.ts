@@ -26,6 +26,11 @@ export type CachedPartialResult = AgentBatchProgress & {
   updatedAt: string;
 };
 
+type CacheMetadata = {
+  lastWatchedAt?: string;
+  title?: string;
+};
+
 function resultPath(cacheDir: string, videoId: string, captionLanguage: string): string {
   return join(cacheDir, videoId, captionLanguage, WORKFLOW_VERSION, "result.json");
 }
@@ -54,17 +59,36 @@ function validIsoTimestamp(value: unknown): string | undefined {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : undefined;
 }
 
-async function readLastWatchedAt(cacheDir: string, videoId: string, captionLanguage: string): Promise<string | undefined> {
+function validTitle(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() && value.trim().length <= 500 ? value.trim() : undefined;
+}
+
+async function readCacheMetadata(cacheDir: string, videoId: string, captionLanguage: string): Promise<CacheMetadata> {
   try {
     const content = await readFile(metadataPath(cacheDir, videoId, captionLanguage), "utf8");
-    const parsed = JSON.parse(content) as { lastWatchedAt?: unknown };
-    return validIsoTimestamp(parsed.lastWatchedAt);
+    const parsed = JSON.parse(content) as { lastWatchedAt?: unknown; title?: unknown };
+    const lastWatchedAt = validIsoTimestamp(parsed.lastWatchedAt);
+    const title = validTitle(parsed.title);
+    return {
+      ...(lastWatchedAt ? { lastWatchedAt } : {}),
+      ...(title ? { title } : {}),
+    };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) {
-      return undefined;
+      return {};
     }
     throw error;
   }
+}
+
+async function writeCacheMetadata(
+  cacheDir: string,
+  videoId: string,
+  captionLanguage: string,
+  metadata: CacheMetadata,
+): Promise<void> {
+  const current = await readCacheMetadata(cacheDir, videoId, captionLanguage);
+  await writeJsonFileAtomically(metadataPath(cacheDir, videoId, captionLanguage), { ...current, ...metadata });
 }
 
 function newestTimestamp(...values: Array<string | undefined>): string {
@@ -162,8 +186,26 @@ export async function markCachedVideoWatched(
   videoId: string,
   captionLanguage: string,
   watchedAt = new Date().toISOString(),
+  title?: string,
 ): Promise<void> {
-  await writeJsonFileAtomically(metadataPath(cacheDir, videoId, captionLanguage), { lastWatchedAt: watchedAt });
+  const normalizedTitle = validTitle(title);
+  await writeCacheMetadata(cacheDir, videoId, captionLanguage, {
+    lastWatchedAt: watchedAt,
+    ...(normalizedTitle ? { title: normalizedTitle } : {}),
+  });
+}
+
+export async function writeCachedVideoTitle(
+  cacheDir: string,
+  videoId: string,
+  captionLanguage: string,
+  title: string | undefined,
+): Promise<void> {
+  const normalizedTitle = validTitle(title);
+  if (!normalizedTitle) {
+    return;
+  }
+  await writeCacheMetadata(cacheDir, videoId, captionLanguage, { title: normalizedTitle });
 }
 
 export async function listCachedVideoSummaries(cacheDir: string): Promise<CachedVideoSummary[]> {
@@ -196,23 +238,24 @@ export async function listCachedVideoSummaries(cacheDir: string): Promise<Cached
       const captionLanguage = languageDir.name;
       const path = resultPath(cacheDir, videoId, captionLanguage);
       try {
-        const [content, resultStats, lastWatchedAt] = await Promise.all([
+        const [content, resultStats, metadata] = await Promise.all([
           readFile(path, "utf8"),
           stat(path),
-          readLastWatchedAt(cacheDir, videoId, captionLanguage),
+          readCacheMetadata(cacheDir, videoId, captionLanguage),
         ]);
         const parsed = JSON.parse(content) as unknown;
         if (!matchesCacheIdentity(parsed, videoId, captionLanguage, WORKFLOW_VERSION)) {
           continue;
         }
         assertCachedResult(parsed);
-        const sortAt = lastWatchedAt ?? newestTimestamp(parsed.generatedAt, resultStats.mtime.toISOString());
+        const sortAt = metadata.lastWatchedAt ?? newestTimestamp(parsed.generatedAt, resultStats.mtime.toISOString());
         summaries.push({
           videoId,
+          ...(metadata.title ? { title: metadata.title } : {}),
           captionLanguage,
           workflowVersion: parsed.workflowVersion,
           generatedAt: parsed.generatedAt,
-          ...(lastWatchedAt ? { lastWatchedAt } : {}),
+          ...(metadata.lastWatchedAt ? { lastWatchedAt: metadata.lastWatchedAt } : {}),
           sortAt,
           subtitleCount: parsed.subtitles.length,
           phraseCount: parsed.phrases.length,

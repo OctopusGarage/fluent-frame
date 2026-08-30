@@ -130,4 +130,16 @@ describe("cache", () => {
       },
     ]);
   });
+
+  it("includes cached video titles in subtitle result summaries", async () => {
+    await writeCachedResult(dir, result);
+    await markCachedVideoWatched(dir, "dQw4w9WgXcQ", "en", "2026-07-24T00:00:00.000Z", "Never Gonna Give You Up");
+
+    await expect(listCachedVideoSummaries(dir)).resolves.toMatchObject([
+      {
+        videoId: "dQw4w9WgXcQ",
+        title: "Never Gonna Give You Up",
+      },
+    ]);
+  });
 });

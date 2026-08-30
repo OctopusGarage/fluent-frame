@@ -23,6 +23,7 @@ export function createQueuedJobProcessor(config: HostConfig, logger: Logger, sto
     const output = await runVideoProcessingPipeline(config, {
       videoId: job.videoId,
       captionLanguage: job.captionLanguage,
+      ...(job.title ? { title: job.title } : {}),
       async onPartialResult(_result, progress) {
         await store.markProgress(job.id, {
           completedBatches: progress.completedBatches,
