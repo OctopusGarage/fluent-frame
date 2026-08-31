@@ -460,6 +460,37 @@ test("shared host response parser does not import request parser runtime", () =>
   assert.deepEqual(forbiddenRuntimeImports, []);
 });
 
+test("shared host protocol parsers share one object guard", () => {
+  const sharedProtocolObjectGuardPath = "packages/shared/src/protocolScalars.ts";
+  const sharedHostProtocolModules = [
+    resolve(repoRoot, "packages/shared/src/protocol.ts"),
+    resolve(repoRoot, "packages/shared/src/hostResponse.ts"),
+    resolve(repoRoot, "packages/shared/src/queue.ts"),
+  ];
+  const guardOwners = listSourceFiles(resolve(repoRoot, "packages/shared/src"))
+    .filter((filePath) => /value\s+is\s+Record<string,\s*unknown>/.test(readFileSync(filePath, "utf8")))
+    .filter((filePath) => /!!value\s+&&\s+typeof\s+value\s+===\s+["']object["']/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+  const violations = [];
+
+  assert.deepEqual(guardOwners, [sharedProtocolObjectGuardPath]);
+
+  for (const filePath of sharedHostProtocolModules) {
+    const source = readFileSync(filePath, "utf8");
+    const displayPath = relative(repoRoot, filePath);
+
+    if (!findRuntimeImportSpecifiers(source).includes("./protocolScalars.js")) {
+      violations.push(`${displayPath} does not import the shared protocol scalar guards`);
+    }
+
+    if (/function\s+isObject\s*\(|const\s+isObject\s*=/.test(source)) {
+      violations.push(`${displayPath} defines a private object guard`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
 test("shared YouTube video ID parser has one runtime owner", () => {
   const sharedSourceRoot = resolve(repoRoot, "packages/shared/src");
   const owners = listSourceFiles(sharedSourceRoot)

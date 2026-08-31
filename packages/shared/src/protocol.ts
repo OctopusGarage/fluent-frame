@@ -1,5 +1,5 @@
 import { parsePersonalNotes, parseUsageNotes } from "./personalNotes.js";
-import { parseCaptionLanguage, parseYoutubeVideoId } from "./protocolScalars.js";
+import { isProtocolObject, parseCaptionLanguage, parseYoutubeVideoId } from "./protocolScalars.js";
 import { parseQueueJobId, type QueueJob, type QueueState } from "./queue.js";
 export { parseHostResponse } from "./hostResponse.js";
 export { parsePersonalNotes, parseUsageNotes } from "./personalNotes.js";
@@ -181,15 +181,11 @@ export function parseRequestId(value: unknown): string {
   return value;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object";
-}
-
 export function parseHostRequest(value: unknown): HostRequest {
-  if (!value || typeof value !== "object") {
+  if (!isProtocolObject(value)) {
     throw new Error("Host request must be an object");
   }
-  const raw = value as Record<string, unknown>;
+  const raw = value;
   const id = parseRequestId(raw.id);
   if (raw.type === "getStatus") {
     return { id, type: "getStatus" };

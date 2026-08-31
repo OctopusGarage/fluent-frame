@@ -1,12 +1,8 @@
 import { isValidLearningSubtitleResult } from "./resultValidation.js";
 import type { HostHealth, HostProgress, HostResponse } from "./protocol.js";
 import { parsePersonalNotes } from "./personalNotes.js";
-import { parseCaptionLanguage, parseNonEmptyString, parseYoutubeVideoId } from "./protocolScalars.js";
+import { isProtocolObject, parseCaptionLanguage, parseNonEmptyString, parseYoutubeVideoId } from "./protocolScalars.js";
 import { parseQueueJob, parseQueueState } from "./queue.js";
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object";
-}
 
 function parseOptionalNonNegativeNumber(value: unknown, message: string): number | undefined {
   if (value === undefined) {
@@ -38,7 +34,7 @@ function parseCachedVideos(value: unknown): Extract<HostResponse, { type: "cache
     throw new Error("Invalid native host response");
   }
   return value.map((item) => {
-    if (!isObject(item)) {
+    if (!isProtocolObject(item)) {
       throw new Error("Invalid native host response");
     }
     const lastWatchedAt = item.lastWatchedAt === undefined
@@ -68,7 +64,7 @@ function parseProgressCache(value: unknown): HostProgress["cache"] {
     return undefined;
   }
   if (
-    !isObject(value) ||
+    !isProtocolObject(value) ||
     typeof value.localResult !== "boolean" ||
     typeof value.remoteResult !== "boolean" ||
     typeof value.partialResult !== "boolean"
@@ -90,7 +86,7 @@ function parseRemoteCacheHealth(value: unknown): HostHealth["remoteCache"] {
   if (value === undefined) {
     return { enabled: false };
   }
-  if (!isObject(value) || typeof value.enabled !== "boolean") {
+  if (!isProtocolObject(value) || typeof value.enabled !== "boolean") {
     throw new Error("Invalid native host response");
   }
   if (!value.enabled) {
@@ -121,7 +117,7 @@ function parseRemoteCacheHealth(value: unknown): HostHealth["remoteCache"] {
 
 function parseProgress(value: unknown): HostProgress {
   if (
-    !isObject(value) ||
+    !isProtocolObject(value) ||
     (value.stage !== "cache" &&
       value.stage !== "download" &&
       value.stage !== "agent" &&
@@ -164,7 +160,7 @@ function parseResultMode(value: unknown): HostResponse extends infer Response
 }
 
 export function parseHostResponse(expectedId: string, response: unknown): HostResponse {
-  if (!isObject(response) || response.id !== expectedId || typeof response.ok !== "boolean") {
+  if (!isProtocolObject(response) || response.id !== expectedId || typeof response.ok !== "boolean") {
     throw new Error("Invalid native host response");
   }
   if (response.ok === false) {
@@ -178,14 +174,14 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
   }
   if (
     response.type === "health" &&
-    isObject(response.health) &&
+    isProtocolObject(response.health) &&
     typeof response.health.version === "string" &&
     typeof response.health.workflowVersion === "string" &&
     (response.health.agent === "codex" || response.health.agent === "claude") &&
     typeof response.health.cacheDir === "string" &&
     typeof response.health.notesFile === "string" &&
     typeof response.health.ytDlpPath === "string" &&
-    isObject(response.health.checks)
+    isProtocolObject(response.health.checks)
   ) {
     return {
       ...response,
@@ -197,7 +193,7 @@ export function parseHostResponse(expectedId: string, response: unknown): HostRe
   }
   if (
     response.type === "progress" &&
-    isObject(response.progress)
+    isProtocolObject(response.progress)
   ) {
     return { id: expectedId, ok: true, type: "progress", progress: parseProgress(response.progress) };
   }

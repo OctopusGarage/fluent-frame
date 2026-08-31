@@ -1,4 +1,4 @@
-import { parseCaptionLanguage, parseNonEmptyString, parseYoutubeVideoId } from "./protocolScalars.js";
+import { isProtocolObject, parseCaptionLanguage, parseNonEmptyString, parseYoutubeVideoId } from "./protocolScalars.js";
 
 export type QueueJobStatus = "queued" | "running" | "done" | "failed" | "skipped";
 
@@ -24,10 +24,6 @@ export type QueueState = {
   runningJobId?: string;
   jobs: QueueJob[];
 };
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object";
-}
 
 function parseTimestamp(value: unknown, message: string): string {
   const timestamp = parseNonEmptyString(value, message);
@@ -69,7 +65,7 @@ export function parseQueueJobId(value: unknown): string {
 }
 
 export function parseQueueJob(value: unknown, message = "Invalid queue job"): QueueJob {
-  if (!isObject(value)) {
+  if (!isProtocolObject(value)) {
     throw new Error(message);
   }
   const status = value.status;
@@ -106,7 +102,7 @@ export function parseQueueJob(value: unknown, message = "Invalid queue job"): Qu
 }
 
 export function parseQueueState(value: unknown, message = "Invalid queue state"): QueueState {
-  if (!isObject(value) || value.paused !== false || !Array.isArray(value.jobs)) {
+  if (!isProtocolObject(value) || value.paused !== false || !Array.isArray(value.jobs)) {
     throw new Error(message);
   }
   try {
