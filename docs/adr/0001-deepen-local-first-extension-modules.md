@@ -35,6 +35,7 @@ Use deep modules at stable seams:
 - Keep personal note mutation behind `personalNotesController`.
 - Keep popup queue behavior behind `popupQueue`.
 - Keep popup pasted-URL enqueue parsing and form wiring behind `popupQueue`.
+- Keep popup subtitle library rendering and cached-video actions behind `popupLibrary`.
 - Keep popup native-host health checks and health-line rendering behind `popupHealth`.
 - Keep popup active-tab behavior behind `popupTabs`.
 
