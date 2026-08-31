@@ -462,6 +462,16 @@ test("extension popup entrypoint delegates queue and active-tab workflows to pop
   assert.doesNotMatch(source, /chrome\.runtime\.sendMessage\(\s*\{\s*type:\s*["'](?:getQueue|enqueueVideo|removeQueueJob|retryQueueJob)["']/);
 });
 
+test("extension popup entrypoint delegates health checks to popup health module", () => {
+  const popupPath = resolve(repoRoot, "apps/extension/src/popup.ts");
+  const source = readFileSync(popupPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+
+  assert.ok(runtimeSpecifiers.includes("./popupHealth.js"));
+  assert.doesNotMatch(source, /chrome\.runtime\.sendMessage\(\s*\{\s*type:\s*["']healthCheck["']/);
+  assert.doesNotMatch(source, /function\s+setHealthLine\s*\(/);
+});
+
 test("extension content script entrypoint exposes only the bootstrap boundary", () => {
   const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
   const source = readFileSync(contentPath, "utf8");

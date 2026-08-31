@@ -34,6 +34,7 @@ Use deep modules at stable seams:
 - Keep learning pane player placement behind `uiPlacement`.
 - Keep personal note mutation behind `personalNotesController`.
 - Keep popup queue behavior behind `popupQueue`.
+- Keep popup native-host health checks and health-line rendering behind `popupHealth`.
 - Keep popup active-tab behavior behind `popupTabs`.
 
 Callers should depend on these module interfaces rather than reconstructing their implementation details.
