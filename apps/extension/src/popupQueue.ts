@@ -1,4 +1,5 @@
 import type { HostResponse, QueueJob, QueueState } from "@fluent-frame/shared";
+import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
 
 export type PopupQueueRuntime = {
   sendMessage(message: unknown): Promise<unknown>;
@@ -175,7 +176,27 @@ export function createPopupQueue(deps: PopupQueueDeps) {
     );
   }
 
+  function bindUrlForm(): void {
+    const form = deps.doc.getElementById("enqueue-url-form");
+    const input = deps.doc.getElementById("enqueue-url");
+    if (!(form instanceof HTMLFormElement) || !(input instanceof HTMLInputElement)) {
+      return;
+    }
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const value = input.value;
+      const videoId = extractYoutubeVideoIdFromUrl(value);
+      if (!videoId) {
+        deps.setStatus("Paste a valid YouTube video URL.");
+        return;
+      }
+      void sendAction({ type: "enqueueVideo", videoId, url: value });
+      input.value = "";
+    });
+  }
+
   return {
+    bindUrlForm,
     refresh,
     sendAction,
     render,

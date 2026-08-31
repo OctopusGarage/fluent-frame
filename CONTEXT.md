@@ -38,5 +38,5 @@ Use `module`, `interface`, `depth`, `seam`, `adapter`, `leverage`, and `locality
 - `apps/extension/src/uiPlacement.ts` owns player badge, subtitle overlay, and video-now pane placement.
 - `apps/extension/src/personalNotesController.ts` owns personal note load/save/mutation behavior.
 - `apps/extension/src/popupHealth.ts` owns popup native-host health checks and health-line rendering.
-- `apps/extension/src/popupQueue.ts` owns popup queue rendering and queue actions.
+- `apps/extension/src/popupQueue.ts` owns popup queue rendering, queue actions, and pasted-URL enqueue form behavior.
 - `apps/extension/src/popupTabs.ts` owns popup active-tab commands.

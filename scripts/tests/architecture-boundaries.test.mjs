@@ -458,8 +458,10 @@ test("extension popup entrypoint delegates queue and active-tab workflows to pop
 
   assert.ok(runtimeSpecifiers.includes("./popupQueue.js"));
   assert.ok(runtimeSpecifiers.includes("./popupTabs.js"));
+  assert.ok(!runtimeSpecifiers.includes("./youtubeUrl.js"));
   assert.doesNotMatch(source, /chrome\.tabs\.(?:query|sendMessage)\(/);
   assert.doesNotMatch(source, /chrome\.runtime\.sendMessage\(\s*\{\s*type:\s*["'](?:getQueue|enqueueVideo|removeQueueJob|retryQueueJob)["']/);
+  assert.doesNotMatch(source, /enqueue-url-form|extractYoutubeVideoIdFromUrl/);
 });
 
 test("extension popup entrypoint delegates health checks to popup health module", () => {

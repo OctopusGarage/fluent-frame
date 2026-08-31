@@ -2,7 +2,6 @@ import { createPopupHealth } from "./popupHealth.js";
 import { createPopupLibrary } from "./popupLibrary.js";
 import { createPopupQueue } from "./popupQueue.js";
 import { createPopupTabs } from "./popupTabs.js";
-import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
 
 const QUEUE_REFRESH_INTERVAL_MS = 5_000;
 
@@ -58,20 +57,7 @@ document.getElementById("enqueue-current")?.addEventListener("click", async () =
   await tabs.enqueueCurrent((input) => queue.sendAction({ type: "enqueueVideo", ...input }));
 });
 
-document.getElementById("enqueue-url-form")?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const input = document.getElementById("enqueue-url");
-  const value = input instanceof HTMLInputElement ? input.value : "";
-  const videoId = extractYoutubeVideoIdFromUrl(value);
-  if (!videoId) {
-    setStatus("Paste a valid YouTube video URL.");
-    return;
-  }
-  void queue.sendAction({ type: "enqueueVideo", videoId, url: value });
-  if (input instanceof HTMLInputElement) {
-    input.value = "";
-  }
-});
+queue.bindUrlForm();
 
 document.getElementById("refresh-health")?.addEventListener("click", () => {
   void health.refresh();
