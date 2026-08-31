@@ -7,16 +7,13 @@ import {
   type NativeClientRuntime,
   type RuntimePort,
 } from "./nativeHostClient.js";
+import { isBackgroundMessage } from "./backgroundMessages.js";
 
 export type StreamingRuntime = NativeClientRuntime & {
   onConnect?: {
     addListener(callback: (port: RuntimePort) => void): void;
   };
 };
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object";
-}
 
 function postToContentPort(contentPort: RuntimePort, response: HostResponse): boolean {
   try {
@@ -35,7 +32,7 @@ export function registerStreamingPortListener(runtime: StreamingRuntime): void {
     let nativeStream: { disconnect(): void } | undefined;
 
     contentPort.onMessage.addListener((message: unknown) => {
-      if (!isObject(message) || message.type !== "processCurrentVideoStream") {
+      if (!isBackgroundMessage(message) || message.type !== "processCurrentVideoStream") {
         return;
       }
       let request: HostRequest;

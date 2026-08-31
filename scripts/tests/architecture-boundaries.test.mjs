@@ -374,6 +374,37 @@ test("extension runtime entrypoint does not re-export one-shot native message in
   assert.deepEqual(forbiddenReExports, []);
 });
 
+test("extension background listener modules share one message object guard", () => {
+  const backgroundMessageGuardPath = "apps/extension/src/backgroundMessages.ts";
+  const backgroundMessageModules = [
+    resolve(repoRoot, "apps/extension/src/backgroundNativeMessages.ts"),
+    resolve(repoRoot, "apps/extension/src/backgroundStreaming.ts"),
+  ];
+  const guardOwners = listSourceFiles(resolve(repoRoot, "apps/extension/src"))
+    .filter((filePath) => /value\s+is\s+Record<string,\s*unknown>/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+  const violations = [];
+
+  if (!guardOwners.includes(backgroundMessageGuardPath)) {
+    violations.push(`${backgroundMessageGuardPath} does not own the background message guard`);
+  }
+
+  for (const filePath of backgroundMessageModules) {
+    const source = readFileSync(filePath, "utf8");
+    const displayPath = relative(repoRoot, filePath);
+
+    if (!findRuntimeImportSpecifiers(source).includes("./backgroundMessages.js")) {
+      violations.push(`${displayPath} does not import the background message guard`);
+    }
+
+    if (/function\s+isObject\s*\(|const\s+isObject\s*=/.test(source)) {
+      violations.push(`${displayPath} defines a private object guard`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
 test("extension native client does not re-export request-id helpers", () => {
   const nativeHostClientPath = resolve(repoRoot, "apps/extension/src/nativeHostClient.ts");
   const source = readFileSync(nativeHostClientPath, "utf8");
