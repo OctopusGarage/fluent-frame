@@ -322,6 +322,39 @@ test("native host parsed-request dispatcher exposes only the router boundary", (
   assert.deepEqual(findExportedDeclarationNames(source), ["handleParsedRequest"]);
 });
 
+test("native host executable entrypoint keeps request routing behind the router seam", () => {
+  const entrypointPath = resolve(repoRoot, "apps/native-host/src/index.ts");
+  const source = readFileSync(entrypointPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+  const forbiddenRoutingInternals = [
+    "./hostRequestHandlers.js",
+    "./processVideoRequestHandler.js",
+    "./cacheRequestHandler.js",
+    "./notesRequestHandler.js",
+    "./queueProcessor.js",
+    "./queueStore.js",
+    "./videoProcessingPipeline.js",
+  ];
+  const violations = [];
+
+  if (!runtimeSpecifiers.includes("./hostRouter.js")) {
+    violations.push("apps/native-host/src/index.ts does not import the native host router");
+  }
+
+  for (const specifier of runtimeSpecifiers) {
+    if (forbiddenRoutingInternals.includes(specifier)) {
+      violations.push(`apps/native-host/src/index.ts imports routing internal ${specifier}`);
+    }
+  }
+
+  if (/parseHostRequest|handleParsedRequest/.test(source)) {
+    violations.push("apps/native-host/src/index.ts bypasses router parsing or dispatch");
+  }
+
+  assert.deepEqual(findExportedDeclarationNames(source), ["handleRequest"]);
+  assert.deepEqual(violations, []);
+});
+
 test("extension runtime entrypoint does not re-export request or native-client internals", () => {
   const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
   const source = readFileSync(backgroundPath, "utf8");
@@ -372,6 +405,37 @@ test("extension runtime entrypoint does not re-export one-shot native message in
   ];
 
   assert.deepEqual(forbiddenReExports, []);
+});
+
+test("extension background listener modules share one message object guard", () => {
+  const backgroundMessageGuardPath = "apps/extension/src/backgroundMessages.ts";
+  const backgroundMessageModules = [
+    resolve(repoRoot, "apps/extension/src/backgroundNativeMessages.ts"),
+    resolve(repoRoot, "apps/extension/src/backgroundStreaming.ts"),
+  ];
+  const guardOwners = listSourceFiles(resolve(repoRoot, "apps/extension/src"))
+    .filter((filePath) => /value\s+is\s+Record<string,\s*unknown>/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+  const violations = [];
+
+  if (!guardOwners.includes(backgroundMessageGuardPath)) {
+    violations.push(`${backgroundMessageGuardPath} does not own the background message guard`);
+  }
+
+  for (const filePath of backgroundMessageModules) {
+    const source = readFileSync(filePath, "utf8");
+    const displayPath = relative(repoRoot, filePath);
+
+    if (!findRuntimeImportSpecifiers(source).includes("./backgroundMessages.js")) {
+      violations.push(`${displayPath} does not import the background message guard`);
+    }
+
+    if (/function\s+isObject\s*\(|const\s+isObject\s*=/.test(source)) {
+      violations.push(`${displayPath} defines a private object guard`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });
 
 test("extension native client does not re-export request-id helpers", () => {
@@ -427,6 +491,37 @@ test("shared host response parser does not import request parser runtime", () =>
     .filter((specifier) => specifier === "./protocol.js");
 
   assert.deepEqual(forbiddenRuntimeImports, []);
+});
+
+test("shared host protocol parsers share one object guard", () => {
+  const sharedProtocolObjectGuardPath = "packages/shared/src/protocolScalars.ts";
+  const sharedHostProtocolModules = [
+    resolve(repoRoot, "packages/shared/src/protocol.ts"),
+    resolve(repoRoot, "packages/shared/src/hostResponse.ts"),
+    resolve(repoRoot, "packages/shared/src/queue.ts"),
+  ];
+  const guardOwners = listSourceFiles(resolve(repoRoot, "packages/shared/src"))
+    .filter((filePath) => /value\s+is\s+Record<string,\s*unknown>/.test(readFileSync(filePath, "utf8")))
+    .filter((filePath) => /!!value\s+&&\s+typeof\s+value\s+===\s+["']object["']/.test(readFileSync(filePath, "utf8")))
+    .map((filePath) => relative(repoRoot, filePath));
+  const violations = [];
+
+  assert.deepEqual(guardOwners, [sharedProtocolObjectGuardPath]);
+
+  for (const filePath of sharedHostProtocolModules) {
+    const source = readFileSync(filePath, "utf8");
+    const displayPath = relative(repoRoot, filePath);
+
+    if (!findRuntimeImportSpecifiers(source).includes("./protocolScalars.js")) {
+      violations.push(`${displayPath} does not import the shared protocol scalar guards`);
+    }
+
+    if (/function\s+isObject\s*\(|const\s+isObject\s*=/.test(source)) {
+      violations.push(`${displayPath} defines a private object guard`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });
 
 test("shared YouTube video ID parser has one runtime owner", () => {
