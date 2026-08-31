@@ -458,8 +458,40 @@ test("extension popup entrypoint delegates queue and active-tab workflows to pop
 
   assert.ok(runtimeSpecifiers.includes("./popupQueue.js"));
   assert.ok(runtimeSpecifiers.includes("./popupTabs.js"));
+  assert.ok(!runtimeSpecifiers.includes("./youtubeUrl.js"));
   assert.doesNotMatch(source, /chrome\.tabs\.(?:query|sendMessage)\(/);
   assert.doesNotMatch(source, /chrome\.runtime\.sendMessage\(\s*\{\s*type:\s*["'](?:getQueue|enqueueVideo|removeQueueJob|retryQueueJob)["']/);
+  assert.doesNotMatch(source, /enqueue-url-form|extractYoutubeVideoIdFromUrl/);
+});
+
+test("extension popup entrypoint delegates health checks to popup health module", () => {
+  const popupPath = resolve(repoRoot, "apps/extension/src/popup.ts");
+  const source = readFileSync(popupPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+
+  assert.ok(runtimeSpecifiers.includes("./popupHealth.js"));
+  assert.doesNotMatch(source, /chrome\.runtime\.sendMessage\(\s*\{\s*type:\s*["']healthCheck["']/);
+  assert.doesNotMatch(source, /function\s+setHealthLine\s*\(/);
+});
+
+test("extension popup entrypoint delegates subtitle library workflows to popup library module", () => {
+  const popupPath = resolve(repoRoot, "apps/extension/src/popup.ts");
+  const source = readFileSync(popupPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+
+  assert.ok(runtimeSpecifiers.includes("./popupLibrary.js"));
+  assert.doesNotMatch(source, /chrome\.runtime\.sendMessage\(\s*\{\s*type:\s*["']listCachedVideos["']/);
+  assert.doesNotMatch(source, /subtitle-library-(?:summary|list)|listCachedVideos/);
+});
+
+test("popup library module interface is recorded in architecture docs", () => {
+  const adrPath = resolve(repoRoot, "docs/adr/0001-deepen-local-first-extension-modules.md");
+  const contextPath = resolve(repoRoot, "CONTEXT.md");
+  const adrSource = readFileSync(adrPath, "utf8");
+  const contextSource = readFileSync(contextPath, "utf8");
+
+  assert.match(adrSource, /Keep popup subtitle library rendering and cached-video actions behind `popupLibrary`/);
+  assert.match(contextSource, /`apps\/extension\/src\/popupLibrary\.ts` owns popup subtitle library rendering and cached-video actions\./);
 });
 
 test("extension content script entrypoint exposes only the bootstrap boundary", () => {

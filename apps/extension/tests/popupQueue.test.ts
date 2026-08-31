@@ -164,6 +164,76 @@ describe("createPopupQueue", () => {
     expect(setStatus).toHaveBeenLastCalledWith("Queued");
   });
 
+  it("binds the pasted URL form to queue enqueue actions", async () => {
+    document.body.innerHTML = `
+      <form id="enqueue-url-form">
+        <input id="enqueue-url" />
+      </form>
+      <div id="queue-summary"></div>
+      <div id="queue-running"></div>
+      <div id="queue-list"></div>
+    `;
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "enqueue-1",
+        ok: true,
+        type: "queueJob",
+        message: "Queued",
+        job: job({ id: "queued", status: "queued" }),
+      })
+      .mockResolvedValueOnce({ id: "q1", ok: true, type: "queue", queue: queue([]) });
+    const setStatus = vi.fn();
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage },
+      openTab: vi.fn(),
+      setStatus,
+    });
+    const form = document.getElementById("enqueue-url-form") as HTMLFormElement;
+    const input = document.getElementById("enqueue-url") as HTMLInputElement;
+    input.value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+    popupQueue.bindUrlForm();
+    form.requestSubmit();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sendMessage).toHaveBeenNthCalledWith(1, {
+      type: "enqueueVideo",
+      videoId: "dQw4w9WgXcQ",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    });
+    expect(input.value).toBe("");
+  });
+
+  it("shows validation feedback when the pasted queue URL is invalid", async () => {
+    document.body.innerHTML = `
+      <form id="enqueue-url-form">
+        <input id="enqueue-url" />
+      </form>
+    `;
+    const sendMessage = vi.fn();
+    const setStatus = vi.fn();
+    const popupQueue = createPopupQueue({
+      doc: document,
+      runtime: { sendMessage },
+      openTab: vi.fn(),
+      setStatus,
+    });
+    const form = document.getElementById("enqueue-url-form") as HTMLFormElement;
+    const input = document.getElementById("enqueue-url") as HTMLInputElement;
+    input.value = "https://example.com/not-youtube";
+
+    popupQueue.bindUrlForm();
+    form.requestSubmit();
+    await Promise.resolve();
+
+    expect(setStatus).toHaveBeenCalledWith("Paste a valid YouTube video URL.");
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(input.value).toBe("https://example.com/not-youtube");
+  });
+
   it("renders the latest queued videos at the top", () => {
     const popupQueue = createPopupQueue({
       doc: document,

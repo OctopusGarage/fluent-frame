@@ -18,6 +18,7 @@ FluentFrame is a local-first Chrome extension for learning English from YouTube 
 - **Video processing pipeline**: The module that assembles agent runner, caption downloader, local cache, and remote cache before invoking subtitle generation.
 - **Native host transport**: The extension-to-native messaging adapter that validates and normalizes native responses.
 - **Popup queue**: The Chrome extension popup surface for queue status and queue actions.
+- **Popup library**: The Chrome extension popup surface for cached subtitle results and video-opening actions.
 
 ## Architecture Vocabulary
 
@@ -37,5 +38,7 @@ Use `module`, `interface`, `depth`, `seam`, `adapter`, `leverage`, and `locality
 - `apps/extension/src/uiLearningView.ts` owns learning subtitle result rendering and playback sync.
 - `apps/extension/src/uiPlacement.ts` owns player badge, subtitle overlay, and video-now pane placement.
 - `apps/extension/src/personalNotesController.ts` owns personal note load/save/mutation behavior.
-- `apps/extension/src/popupQueue.ts` owns popup queue rendering and queue actions.
+- `apps/extension/src/popupHealth.ts` owns popup native-host health checks and health-line rendering.
+- `apps/extension/src/popupQueue.ts` owns popup queue rendering, queue actions, and pasted-URL enqueue form behavior.
+- `apps/extension/src/popupLibrary.ts` owns popup subtitle library rendering and cached-video actions.
 - `apps/extension/src/popupTabs.ts` owns popup active-tab commands.
