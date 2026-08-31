@@ -322,6 +322,39 @@ test("native host parsed-request dispatcher exposes only the router boundary", (
   assert.deepEqual(findExportedDeclarationNames(source), ["handleParsedRequest"]);
 });
 
+test("native host executable entrypoint keeps request routing behind the router seam", () => {
+  const entrypointPath = resolve(repoRoot, "apps/native-host/src/index.ts");
+  const source = readFileSync(entrypointPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+  const forbiddenRoutingInternals = [
+    "./hostRequestHandlers.js",
+    "./processVideoRequestHandler.js",
+    "./cacheRequestHandler.js",
+    "./notesRequestHandler.js",
+    "./queueProcessor.js",
+    "./queueStore.js",
+    "./videoProcessingPipeline.js",
+  ];
+  const violations = [];
+
+  if (!runtimeSpecifiers.includes("./hostRouter.js")) {
+    violations.push("apps/native-host/src/index.ts does not import the native host router");
+  }
+
+  for (const specifier of runtimeSpecifiers) {
+    if (forbiddenRoutingInternals.includes(specifier)) {
+      violations.push(`apps/native-host/src/index.ts imports routing internal ${specifier}`);
+    }
+  }
+
+  if (/parseHostRequest|handleParsedRequest/.test(source)) {
+    violations.push("apps/native-host/src/index.ts bypasses router parsing or dispatch");
+  }
+
+  assert.deepEqual(findExportedDeclarationNames(source), ["handleRequest"]);
+  assert.deepEqual(violations, []);
+});
+
 test("extension runtime entrypoint does not re-export request or native-client internals", () => {
   const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
   const source = readFileSync(backgroundPath, "utf8");
