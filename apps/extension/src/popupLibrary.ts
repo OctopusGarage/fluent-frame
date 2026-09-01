@@ -1,4 +1,5 @@
 import type { CachedVideoSummary, HostResponse } from "@fluent-frame/shared";
+import { formatPopupRelativeTime } from "./popupRelativeTime.js";
 
 export type PopupLibraryRuntime = {
   sendMessage(message: unknown): Promise<unknown>;
@@ -10,24 +11,6 @@ export type PopupLibraryDeps = {
   openTab(url: string): Promise<void>;
   setStatus(message: string): void;
 };
-
-function formatRelativeTime(timestamp: string): string {
-  const elapsedMs = Date.now() - Date.parse(timestamp);
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
-    return "just now";
-  }
-  const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  if (elapsedSeconds < 5) {
-    return "just now";
-  }
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s ago`;
-  }
-  if (elapsedSeconds < 3600) {
-    return `${Math.floor(elapsedSeconds / 60)}m ago`;
-  }
-  return `${Math.floor(elapsedSeconds / 3600)}h ago`;
-}
 
 function videoUrl(video: CachedVideoSummary): string {
   return `https://www.youtube.com/watch?v=${video.videoId}`;
@@ -48,8 +31,8 @@ function plural(count: number, word: string): string {
 
 function videoDetail(video: CachedVideoSummary): string {
   const watchedText = video.lastWatchedAt
-    ? `watched ${formatRelativeTime(video.lastWatchedAt)}`
-    : `generated ${formatRelativeTime(video.generatedAt)}`;
+    ? `watched ${formatPopupRelativeTime(video.lastWatchedAt)}`
+    : `generated ${formatPopupRelativeTime(video.generatedAt)}`;
   return `${watchedText} - ${plural(video.subtitleCount, "subtitle")} - ${plural(video.phraseCount, "phrase")}`;
 }
 

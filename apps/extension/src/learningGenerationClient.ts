@@ -1,4 +1,5 @@
 import type { HostResponse, LearningSubtitleResult } from "@fluent-frame/shared";
+import { isExtensionContextInvalidated } from "./chromeRuntimeErrors.js";
 
 export type LearningGenerationResultMeta = {
   mode?: Extract<HostResponse, { type: "result" }>["mode"];
@@ -55,7 +56,7 @@ export type LearningGenerationClient = {
 };
 
 function connectionErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message.includes("Extension context invalidated")
+  return isExtensionContextInvalidated(error)
     ? "Extension was reloaded. Refresh this YouTube tab."
     : "Local helper failed";
 }

@@ -1,4 +1,5 @@
 import type { HostResponse, QueueJob, QueueState } from "@fluent-frame/shared";
+import { formatPopupRelativeTime } from "./popupRelativeTime.js";
 import { extractYoutubeVideoIdFromUrl } from "./youtubeUrl.js";
 
 export type PopupQueueRuntime = {
@@ -25,21 +26,6 @@ function jobLabel(job: QueueJob): string {
   return job.title || job.videoId;
 }
 
-function formatRelativeTime(timestamp: string): string {
-  const elapsedMs = Date.now() - Date.parse(timestamp);
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
-    return "just now";
-  }
-  const elapsedSeconds = Math.floor(elapsedMs / 1000);
-  if (elapsedSeconds < 5) {
-    return "just now";
-  }
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s ago`;
-  }
-  return `${Math.floor(elapsedSeconds / 60)}m ago`;
-}
-
 function jobDetail(job: QueueJob): string {
   if (job.status === "failed" && job.error) {
     return job.error;
@@ -47,9 +33,9 @@ function jobDetail(job: QueueJob): string {
   if (job.status === "running") {
     const completed = job.completedBatches ?? 0;
     if (job.totalBatches && job.totalBatches > 0) {
-      return `Generating batch ${completed}/${job.totalBatches} - updated ${formatRelativeTime(job.updatedAt)}`;
+      return `Generating batch ${completed}/${job.totalBatches} - updated ${formatPopupRelativeTime(job.updatedAt, { maxUnit: "minutes" })}`;
     }
-    return `Preparing batches - updated ${formatRelativeTime(job.updatedAt)}`;
+    return `Preparing batches - updated ${formatPopupRelativeTime(job.updatedAt, { maxUnit: "minutes" })}`;
   }
   return job.url || `https://www.youtube.com/watch?v=${job.videoId}`;
 }
@@ -62,9 +48,9 @@ function runningJobText(job: QueueJob): string {
   const label = jobLabel(job);
   const completed = job.completedBatches ?? 0;
   if (job.totalBatches && job.totalBatches > 0) {
-    return `Generating: ${label} - batch ${completed}/${job.totalBatches} - ${formatRelativeTime(job.updatedAt)}`;
+    return `Generating: ${label} - batch ${completed}/${job.totalBatches} - ${formatPopupRelativeTime(job.updatedAt, { maxUnit: "minutes" })}`;
   }
-  return `Generating: ${label} - preparing batches - ${formatRelativeTime(job.updatedAt)}`;
+  return `Generating: ${label} - preparing batches - ${formatPopupRelativeTime(job.updatedAt, { maxUnit: "minutes" })}`;
 }
 
 function timestampMs(job: QueueJob): number {
