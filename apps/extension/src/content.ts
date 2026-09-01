@@ -1,4 +1,5 @@
 import type { HostResponse, PersonalNote } from "@fluent-frame/shared";
+import { errorMessage, isExtensionContextInvalidated } from "./chromeRuntimeErrors.js";
 import { createVideoLearningSession } from "./generationSession.js";
 import { createRuntimeLearningGenerationClient, type ContentScriptRuntime } from "./learningGenerationClient.js";
 import { createCoachUi, type PersonalNotesStore } from "./ui.js";
@@ -37,10 +38,11 @@ function titleForRightClickedVideo(anchor: HTMLAnchorElement): string | undefine
 }
 
 function runtimeSendErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message.includes("Extension context invalidated")
+  const message = errorMessage(error);
+  return isExtensionContextInvalidated(error)
     ? "Extension was reloaded. Refresh this YouTube tab."
-    : error instanceof Error
-      ? error.message
+    : message
+      ? message
       : "Local helper failed";
 }
 
