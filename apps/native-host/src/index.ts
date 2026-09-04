@@ -6,7 +6,7 @@ import { type HostResponse } from "@fluent-frame/shared";
 import { loadHostConfig } from "./config.js";
 import { handleRequest } from "./hostRouter.js";
 import { readNativeMessage, writeNativeMessage } from "./nativeMessaging.js";
-import { runQueueWorker } from "./queueRequestHandler.js";
+import { runQueueWorker } from "./queueRuntime.js";
 
 export { handleRequest };
 

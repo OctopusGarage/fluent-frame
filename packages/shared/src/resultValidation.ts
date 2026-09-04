@@ -1,10 +1,7 @@
 import type { AgentOutput, LearningSubtitleResult, PhraseExplanation, SubtitleCue, UsageNote } from "./protocol.js";
+import { isProtocolObject } from "./protocolScalars.js";
 
 const difficulties = new Set(["basic", "useful", "advanced"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -12,7 +9,7 @@ function isStringArray(value: unknown): value is string[] {
 
 export function isValidUsageNote(value: unknown): value is UsageNote {
   return (
-    isRecord(value) &&
+    isProtocolObject(value) &&
     typeof value.term === "string" &&
     typeof value.question === "string" &&
     typeof value.explanation === "string"
@@ -21,7 +18,7 @@ export function isValidUsageNote(value: unknown): value is UsageNote {
 
 export function isValidSubtitleCue(value: unknown): value is SubtitleCue {
   return (
-    isRecord(value) &&
+    isProtocolObject(value) &&
     typeof value.id === "number" &&
     Number.isInteger(value.id) &&
     typeof value.startMs === "number" &&
@@ -37,7 +34,7 @@ export function isValidSubtitleCue(value: unknown): value is SubtitleCue {
 
 export function isValidPhraseExplanation(value: unknown): value is PhraseExplanation {
   return (
-    isRecord(value) &&
+    isProtocolObject(value) &&
     typeof value.id === "string" &&
     typeof value.cueId === "number" &&
     Number.isInteger(value.cueId) &&
@@ -53,7 +50,7 @@ export function isValidPhraseExplanation(value: unknown): value is PhraseExplana
 
 export function isValidLearningSubtitleResult(value: unknown): value is LearningSubtitleResult {
   if (
-    !isRecord(value) ||
+    !isProtocolObject(value) ||
     typeof value.videoId !== "string" ||
     typeof value.sourceLanguage !== "string" ||
     typeof value.workflowVersion !== "string" ||
@@ -86,7 +83,7 @@ export function assertLearningSubtitleResult(value: unknown, message = "Invalid 
 
 export function isValidAgentOutput(value: unknown): value is AgentOutput {
   return (
-    isRecord(value) &&
+    isProtocolObject(value) &&
     Array.isArray(value.subtitles) &&
     value.subtitles.length > 0 &&
     value.subtitles.every(isValidSubtitleCue) &&

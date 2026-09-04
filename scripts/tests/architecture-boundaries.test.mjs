@@ -332,6 +332,7 @@ test("native host executable entrypoint keeps request routing behind the router 
     "./cacheRequestHandler.js",
     "./notesRequestHandler.js",
     "./queueProcessor.js",
+    "./queueRequestHandler.js",
     "./queueStore.js",
     "./videoProcessingPipeline.js",
   ];
@@ -531,6 +532,7 @@ test("shared host protocol parsers share one object guard", () => {
     resolve(repoRoot, "packages/shared/src/protocol.ts"),
     resolve(repoRoot, "packages/shared/src/hostResponse.ts"),
     resolve(repoRoot, "packages/shared/src/queue.ts"),
+    resolve(repoRoot, "packages/shared/src/resultValidation.ts"),
   ];
   const guardOwners = listSourceFiles(resolve(repoRoot, "packages/shared/src"))
     .filter((filePath) => /value\s+is\s+Record<string,\s*unknown>/.test(readFileSync(filePath, "utf8")))
@@ -548,7 +550,7 @@ test("shared host protocol parsers share one object guard", () => {
       violations.push(`${displayPath} does not import the shared protocol scalar guards`);
     }
 
-    if (/function\s+isObject\s*\(|const\s+isObject\s*=/.test(source)) {
+    if (/function\s+is(?:Object|Record)\s*\(|const\s+is(?:Object|Record)\s*=/.test(source)) {
       violations.push(`${displayPath} defines a private object guard`);
     }
   }
