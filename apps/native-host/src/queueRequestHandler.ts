@@ -1,27 +1,14 @@
 import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
 import { createQueueCoordinator } from "./queueCoordinator.js";
-import { createQueueRunner, type QueueRunner } from "./queueRunner.js";
-import { createQueueStore, type QueueStore } from "./queueStore.js";
-import { createLogger, type Logger } from "./logger.js";
-import { createQueuedJobProcessor } from "./queueProcessor.js";
 import { createQueueEventLogger } from "./queueEventLogger.js";
 import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
-import { startQueue } from "./queueWorkerProcess.js";
+import { createQueueRuntime } from "./queueRuntime.js";
 
 type EnqueueVideoRequest = Extract<HostRequest, { type: "enqueueVideo" }>;
 type GetQueueRequest = Extract<HostRequest, { type: "getQueue" }>;
 type RemoveQueueJobRequest = Extract<HostRequest, { type: "removeQueueJob" }>;
 type RetryQueueJobRequest = Extract<HostRequest, { type: "retryQueueJob" }>;
-
-const runners = new Map<string, QueueRunner>();
-
-type QueueRuntime = {
-  logger: Logger;
-  store: QueueStore;
-  runner(): QueueRunner;
-  startQueue(): void;
-};
 
 function queueErrorResponse(id: string, error: unknown): HostResponse {
   return {
@@ -31,35 +18,6 @@ function queueErrorResponse(id: string, error: unknown): HostResponse {
     code: "QUEUE_ERROR",
     message: error instanceof Error ? error.message : "Queue operation failed",
   };
-}
-
-function queueRunner(config: HostConfig, logger: Logger, store: QueueStore): QueueRunner {
-  const existing = runners.get(config.queueFile);
-  if (existing) {
-    return existing;
-  }
-  const runner = createQueueRunner({
-    store,
-    logger,
-    processJob: createQueuedJobProcessor(config, logger, store),
-  });
-  runners.set(config.queueFile, runner);
-  return runner;
-}
-
-function createQueueRuntime(config: HostConfig): QueueRuntime {
-  const logger = createLogger(config.logFile);
-  const store = createQueueStore(config.queueFile);
-  return {
-    logger,
-    store,
-    runner: () => queueRunner(config, logger, store),
-    startQueue: () => startQueue(config),
-  };
-}
-
-export async function runQueueWorker(config: HostConfig): Promise<void> {
-  await createQueueRuntime(config).runner().start();
 }
 
 export function createQueueRequestHandler(config: HostConfig) {

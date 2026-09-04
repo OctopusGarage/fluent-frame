@@ -332,6 +332,7 @@ test("native host executable entrypoint keeps request routing behind the router 
     "./cacheRequestHandler.js",
     "./notesRequestHandler.js",
     "./queueProcessor.js",
+    "./queueRequestHandler.js",
     "./queueStore.js",
     "./videoProcessingPipeline.js",
   ];
