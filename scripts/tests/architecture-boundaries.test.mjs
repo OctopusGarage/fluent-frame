@@ -520,6 +520,29 @@ test("popup library module interface is recorded in architecture docs", () => {
   assert.match(contextSource, /`apps\/extension\/src\/popupLibrary\.ts` owns popup subtitle library rendering and cached-video actions\./);
 });
 
+test("extension coach UI entrypoint keeps learning result state behind the learning view seam", () => {
+  const uiPath = resolve(repoRoot, "apps/extension/src/ui.ts");
+  const source = readFileSync(uiPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+  const violations = [];
+
+  if (!runtimeSpecifiers.includes("./uiLearningView.js")) {
+    violations.push("apps/extension/src/ui.ts does not import the learning view module");
+  }
+
+  if (runtimeSpecifiers.includes("./uiState.js")) {
+    violations.push("apps/extension/src/ui.ts imports learning view state selectors directly");
+  }
+
+  if (/selectCaptionWindow|selectLearningEventWindow|VISIBLE_SENTENCE_COUNT/.test(source)) {
+    violations.push("apps/extension/src/ui.ts rebuilds learning view window selection");
+  }
+
+  assert.match(source, /setResult\(nextResult,\s*message\s*=\s*["']Learning subtitles ready["']\)\s*\{\s*learningView\.setResult\(nextResult,\s*message\);/);
+  assert.match(source, /sync\(currentMs\)\s*\{\s*learningView\.sync\(currentMs\);/);
+  assert.deepEqual(violations, []);
+});
+
 test("extension content script entrypoint exposes only the bootstrap boundary", () => {
   const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
   const source = readFileSync(contentPath, "utf8");
