@@ -356,6 +356,19 @@ test("native host executable entrypoint keeps request routing behind the router 
   assert.deepEqual(violations, []);
 });
 
+test("native host executable entrypoint composes only runtime boundary modules", () => {
+  const entrypointPath = resolve(repoRoot, "apps/native-host/src/index.ts");
+  const source = readFileSync(entrypointPath, "utf8");
+  const localRuntimeSpecifiers = findRuntimeImportSpecifiers(source).filter((specifier) => specifier.startsWith("."));
+
+  assert.deepEqual(localRuntimeSpecifiers.sort(), [
+    "./config.js",
+    "./hostRouter.js",
+    "./nativeMessaging.js",
+    "./queueRuntime.js",
+  ]);
+});
+
 test("extension runtime entrypoint does not re-export request or native-client internals", () => {
   const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
   const source = readFileSync(backgroundPath, "utf8");
