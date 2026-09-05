@@ -594,14 +594,23 @@ test("e2e native host manifests use the shared host name owner", () => {
 
 test("local setup scripts keep their startup-safe native host name copy aligned with shared", () => {
   const sharedProtocolPath = resolve(repoRoot, "packages/shared/src/protocol.ts");
-  const localCommonPath = resolve(repoRoot, "scripts/local-common.mjs");
+  const localConstantsPath = resolve(repoRoot, "scripts/local-constants.mjs");
   const sharedSource = readFileSync(sharedProtocolPath, "utf8");
-  const localCommonSource = readFileSync(localCommonPath, "utf8");
+  const localConstantsSource = readFileSync(localConstantsPath, "utf8");
 
   assert.equal(
-    findExportedStringConst(localCommonSource, "nativeHostName"),
+    findExportedStringConst(localConstantsSource, "nativeHostName"),
     findExportedStringConst(sharedSource, "NATIVE_HOST_NAME"),
   );
+});
+
+test("local setup scripts share one native-host installer env builder", () => {
+  const localCommonPath = resolve(repoRoot, "scripts/local-common.mjs");
+  const source = readFileSync(localCommonPath, "utf8");
+
+  assert.match(source, /import\s+\{\s*buildNativeHostEnv,\s*getChromeExtensionsOpenCommand\s*\}\s+from\s+["']\.\/local-workflow\.mjs["']/);
+  assert.match(source, /const\s+env\s*=\s*buildNativeHostEnv\(config\)/);
+  assert.doesNotMatch(source, /env\.FF_(?:AGENT|YTDLP_PATH|CODEX_PATH|CLAUDE_PATH)\s*=/);
 });
 
 test("published docs do not keep generated architecture slice reports", () => {
