@@ -604,6 +604,15 @@ test("local setup scripts keep their startup-safe native host name copy aligned 
   );
 });
 
+test("local setup scripts share one native-host installer env builder", () => {
+  const localCommonPath = resolve(repoRoot, "scripts/local-common.mjs");
+  const source = readFileSync(localCommonPath, "utf8");
+
+  assert.match(source, /import\s+\{\s*buildNativeHostEnv,\s*getChromeExtensionsOpenCommand\s*\}\s+from\s+["']\.\/local-workflow\.mjs["']/);
+  assert.match(source, /const\s+env\s*=\s*buildNativeHostEnv\(config\)/);
+  assert.doesNotMatch(source, /env\.FF_(?:AGENT|YTDLP_PATH|CODEX_PATH|CLAUDE_PATH)\s*=/);
+});
+
 test("published docs do not keep generated architecture slice reports", () => {
   const generatedReports = listFilesOneLevel(docsRoot, /^architecture-slice-\d+-report\.md$/)
     .map((filePath) => relative(repoRoot, filePath));

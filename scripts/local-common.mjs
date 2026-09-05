@@ -5,7 +5,7 @@ import { homedir, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeHostName } from "./local-constants.mjs";
-import { getChromeExtensionsOpenCommand } from "./local-workflow.mjs";
+import { buildNativeHostEnv, getChromeExtensionsOpenCommand } from "./local-workflow.mjs";
 
 export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const dataDir = join(homedir(), ".fluent-frame");
@@ -96,21 +96,9 @@ export function validateExtensionId(extensionId) {
 }
 
 export async function installNativeHost({ extensionId, config }) {
-  const env = {};
+  const env = buildNativeHostEnv(config);
   if (extensionId) {
     env.FF_EXTENSION_ID = extensionId;
-  }
-  if (config.agent) {
-    env.FF_AGENT = config.agent;
-  }
-  if (config.ytDlpPath) {
-    env.FF_YTDLP_PATH = config.ytDlpPath;
-  }
-  if (config.codexPath) {
-    env.FF_CODEX_PATH = config.codexPath;
-  }
-  if (config.claudePath) {
-    env.FF_CLAUDE_PATH = config.claudePath;
   }
   await run("pnpm", ["--filter", "@fluent-frame/native-host", "install:native-host"], { env });
 }
