@@ -408,6 +408,18 @@ test("extension runtime entrypoint does not re-export one-shot native message in
   assert.deepEqual(forbiddenReExports, []);
 });
 
+test("extension runtime entrypoint composes only listener and context-menu boundaries", () => {
+  const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
+  const source = readFileSync(backgroundPath, "utf8");
+  const localRuntimeSpecifiers = findRuntimeImportSpecifiers(source).filter((specifier) => specifier.startsWith("."));
+
+  assert.deepEqual(localRuntimeSpecifiers.sort(), [
+    "./backgroundNativeMessages.js",
+    "./backgroundQueueContextMenus.js",
+    "./backgroundStreaming.js",
+  ]);
+});
+
 test("extension background listener modules share one message object guard", () => {
   const backgroundMessageGuardPath = "apps/extension/src/backgroundMessages.ts";
   const backgroundMessageModules = [
