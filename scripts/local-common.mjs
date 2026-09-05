@@ -4,13 +4,13 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeHostName } from "./local-constants.mjs";
 import { getChromeExtensionsOpenCommand } from "./local-workflow.mjs";
 
 export const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const dataDir = join(homedir(), ".fluent-frame");
 export const configPath = join(dataDir, "config.json");
 export const extensionDistPath = join(rootDir, "apps", "extension", "dist");
-export const nativeHostName = "com.octopusgarage.fluent_frame";
 export const nativeHostManifestPath = join(
   homedir(),
   "Library",

@@ -594,12 +594,12 @@ test("e2e native host manifests use the shared host name owner", () => {
 
 test("local setup scripts keep their startup-safe native host name copy aligned with shared", () => {
   const sharedProtocolPath = resolve(repoRoot, "packages/shared/src/protocol.ts");
-  const localCommonPath = resolve(repoRoot, "scripts/local-common.mjs");
+  const localConstantsPath = resolve(repoRoot, "scripts/local-constants.mjs");
   const sharedSource = readFileSync(sharedProtocolPath, "utf8");
-  const localCommonSource = readFileSync(localCommonPath, "utf8");
+  const localConstantsSource = readFileSync(localConstantsPath, "utf8");
 
   assert.equal(
-    findExportedStringConst(localCommonSource, "nativeHostName"),
+    findExportedStringConst(localConstantsSource, "nativeHostName"),
     findExportedStringConst(sharedSource, "NATIVE_HOST_NAME"),
   );
 });
