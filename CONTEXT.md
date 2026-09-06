@@ -33,6 +33,7 @@ Use `module`, `interface`, `depth`, `seam`, `adapter`, `leverage`, and `locality
 - `apps/native-host/src/queueWorkerProcess.ts` contains detached queue worker process startup.
 - `apps/extension/src/backgroundRequests.ts` builds native host requests for background routing.
 - `apps/extension/src/nativeHostClient.ts` owns native host transport.
+- `apps/extension/src/contentNativeMessages.ts` owns content-script runtime messages for notes, queue actions, watched metadata, and remembered context-menu links.
 - `apps/extension/src/uiPersistence.ts` owns persisted learning pane layout state.
 - `apps/extension/src/uiLayoutController.ts` owns learning pane layout mutation and restoration.
 - `apps/extension/src/uiLearningView.ts` owns learning subtitle result rendering and playback sync.

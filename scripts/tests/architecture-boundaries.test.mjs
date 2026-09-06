@@ -561,6 +561,24 @@ test("extension content script entrypoint exposes only the bootstrap boundary", 
   assert.deepEqual(findExportedDeclarationNames(source), ["ContentScriptRuntime", "bootstrapContentScript"]);
 });
 
+test("extension content script keeps native runtime messages behind content native messaging", () => {
+  const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
+  const source = readFileSync(contentPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+  const inlineNativeMessageTypes = [
+    "getPersonalNotes",
+    "savePersonalNotes",
+    "rememberContextMenuLink",
+    "enqueueVideo",
+    "markCachedVideoWatched",
+  ];
+
+  assert.ok(runtimeSpecifiers.includes("./contentNativeMessages.js"));
+  for (const messageType of inlineNativeMessageTypes) {
+    assert.doesNotMatch(source, new RegExp(`type:\\s*["']${messageType}["']`));
+  }
+});
+
 test("extension content script runtime graph keeps shared protocol imports type-only", () => {
   const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
   const violations = [];
