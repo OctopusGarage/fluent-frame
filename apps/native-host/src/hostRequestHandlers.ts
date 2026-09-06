@@ -9,8 +9,50 @@ import type { Logger } from "./logger.js";
 
 type HostRequestHandler<T extends HostRequest = HostRequest> = (
   request: T,
-  context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
+  context: HostRequestContext,
 ) => Promise<HostResponse>;
+type HostRequestContext = { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void };
+type CacheRequest = Extract<HostRequest, { type: "getCachedVideo" | "listCachedVideos" | "markCachedVideoWatched" | "clearVideoCache" }>;
+type NotesRequest = Extract<HostRequest, { type: "getPersonalNotes" | "savePersonalNotes" }>;
+type QueueRequest = Extract<HostRequest, { type: "enqueueVideo" | "getQueue" | "removeQueueJob" | "retryQueueJob" }>;
+
+function handleCacheRequest(request: CacheRequest, { config }: HostRequestContext): Promise<HostResponse> {
+  const handler = createCacheRequestHandler(config);
+  switch (request.type) {
+    case "getCachedVideo":
+      return handler.getCachedVideo(request);
+    case "listCachedVideos":
+      return handler.listCachedVideos(request);
+    case "markCachedVideoWatched":
+      return handler.markCachedVideoWatched(request);
+    case "clearVideoCache":
+      return handler.clearVideoCache(request);
+  }
+}
+
+function handleNotesRequest(request: NotesRequest, { config }: HostRequestContext): Promise<HostResponse> {
+  const handler = createNotesRequestHandler(config);
+  switch (request.type) {
+    case "getPersonalNotes":
+      return handler.getPersonalNotes(request);
+    case "savePersonalNotes":
+      return handler.savePersonalNotes(request);
+  }
+}
+
+function handleQueueRequest(request: QueueRequest, { config }: HostRequestContext): Promise<HostResponse> {
+  const handler = createQueueRequestHandler(config);
+  switch (request.type) {
+    case "enqueueVideo":
+      return handler.enqueueVideo(request);
+    case "getQueue":
+      return handler.getQueue(request);
+    case "removeQueueJob":
+      return handler.removeQueueJob(request);
+    case "retryQueueJob":
+      return handler.retryQueueJob(request);
+  }
+}
 
 const requestHandlers = {
   async getStatus(request) {
@@ -19,24 +61,12 @@ const requestHandlers = {
   async healthCheck(request, { config }) {
     return { id: request.id, ok: true, type: "health", health: await buildHealth(config) };
   },
-  async getCachedVideo(request, { config }) {
-    return createCacheRequestHandler(config).getCachedVideo(request);
-  },
-  async listCachedVideos(request, { config }) {
-    return createCacheRequestHandler(config).listCachedVideos(request);
-  },
-  async markCachedVideoWatched(request, { config }) {
-    return createCacheRequestHandler(config).markCachedVideoWatched(request);
-  },
-  async getPersonalNotes(request, { config }) {
-    return createNotesRequestHandler(config).getPersonalNotes(request);
-  },
-  async savePersonalNotes(request, { config }) {
-    return createNotesRequestHandler(config).savePersonalNotes(request);
-  },
-  async clearVideoCache(request, { config }) {
-    return createCacheRequestHandler(config).clearVideoCache(request);
-  },
+  getCachedVideo: handleCacheRequest,
+  listCachedVideos: handleCacheRequest,
+  markCachedVideoWatched: handleCacheRequest,
+  getPersonalNotes: handleNotesRequest,
+  savePersonalNotes: handleNotesRequest,
+  clearVideoCache: handleCacheRequest,
   async processVideo(request, { config, logger, emit }) {
     return handleProcessVideoRequest(request, {
       config,
@@ -44,23 +74,15 @@ const requestHandlers = {
       ...(emit ? { emit } : {}),
     });
   },
-  async enqueueVideo(request, { config }) {
-    return createQueueRequestHandler(config).enqueueVideo(request);
-  },
-  async getQueue(request, { config }) {
-    return createQueueRequestHandler(config).getQueue(request);
-  },
-  async removeQueueJob(request, { config }) {
-    return createQueueRequestHandler(config).removeQueueJob(request);
-  },
-  async retryQueueJob(request, { config }) {
-    return createQueueRequestHandler(config).retryQueueJob(request);
-  },
+  enqueueVideo: handleQueueRequest,
+  getQueue: handleQueueRequest,
+  removeQueueJob: handleQueueRequest,
+  retryQueueJob: handleQueueRequest,
 } satisfies { [Type in HostRequest["type"]]: HostRequestHandler<Extract<HostRequest, { type: Type }>> };
 
 export function handleParsedRequest(
   request: HostRequest,
-  context: { config: HostConfig; logger: Logger; emit?: (response: HostResponse) => void },
+  context: HostRequestContext,
 ): Promise<HostResponse> {
   return requestHandlers[request.type](request as never, context);
 }
