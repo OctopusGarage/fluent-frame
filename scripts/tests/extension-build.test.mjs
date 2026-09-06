@@ -5,6 +5,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 test("extension content script is bundled without shared chunk imports", () => {
+  execFileSync("pnpm", ["--filter", "@fluent-frame/shared", "build"], {
+    cwd: resolve(import.meta.dirname, "..", ".."),
+    stdio: "pipe",
+  });
   execFileSync("pnpm", ["--filter", "@fluent-frame/extension", "build"], {
     cwd: resolve(import.meta.dirname, "..", ".."),
     stdio: "pipe",
