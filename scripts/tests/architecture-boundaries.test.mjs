@@ -315,6 +315,17 @@ test("native host request handlers do not re-export worker or processor internal
   assert.deepEqual(forbiddenReExports, []);
 });
 
+test("native host queue request handler consumes queue support through one module interface", () => {
+  const queueRequestHandlerPath = resolve(repoRoot, "apps/native-host/src/queueRequestHandler.ts");
+  const source = readFileSync(queueRequestHandlerPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+
+  assert.ok(runtimeSpecifiers.includes("./queueSupport.js"));
+  assert.match(source, /import\s+\{\s*createQueueSupport\s*\}\s+from\s+["']\.\/queueSupport\.js["']/);
+  assert.doesNotMatch(source, /import\s+\{\s*(?:cacheReady|resolveVideoTitle)/);
+  assert.doesNotMatch(source, /(?:cacheReady|resolveVideoTitle)\(config,/);
+});
+
 test("native host parsed-request dispatcher exposes only the router boundary", () => {
   const hostRequestHandlersPath = resolve(repoRoot, "apps/native-host/src/hostRequestHandlers.ts");
   const source = readFileSync(hostRequestHandlersPath, "utf8");
