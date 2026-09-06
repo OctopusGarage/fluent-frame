@@ -1,8 +1,14 @@
-import type { HostResponse, PersonalNote } from "@fluent-frame/shared";
-import { errorMessage, isExtensionContextInvalidated } from "./chromeRuntimeErrors.js";
+import {
+  cleanTitle,
+  createNativeNotesStore,
+  enqueueVideo,
+  markVideoWatched,
+  rememberContextMenuLink,
+  titleForRightClickedVideo,
+} from "./contentNativeMessages.js";
 import { createVideoLearningSession } from "./generationSession.js";
 import { createRuntimeLearningGenerationClient, type ContentScriptRuntime } from "./learningGenerationClient.js";
-import { createCoachUi, type PersonalNotesStore } from "./ui.js";
+import { createCoachUi } from "./ui.js";
 import { extractVideoIdFromUrl } from "./video.js";
 import { createYouTubePage } from "./youtubePage.js";
 export type { ContentScriptRuntime };
@@ -13,75 +19,6 @@ type BootstrapWindow = Window & {
 };
 
 const SYNC_INTERVAL_MS = 50;
-
-const VIDEO_CARD_SELECTOR = [
-  "ytd-compact-video-renderer",
-  "ytd-video-renderer",
-  "ytd-rich-item-renderer",
-  "ytd-grid-video-renderer",
-  "ytd-playlist-panel-video-renderer",
-].join(",");
-
-function cleanTitle(value: string | null | undefined): string | undefined {
-  const title = value?.replace(/\s+/g, " ").trim();
-  return title || undefined;
-}
-
-function titleForRightClickedVideo(anchor: HTMLAnchorElement): string | undefined {
-  const card = anchor.closest(VIDEO_CARD_SELECTOR);
-  const titleElement = card?.querySelector("#video-title, a#video-title, h3, h3 a, yt-formatted-string#video-title");
-  return cleanTitle(titleElement?.textContent)
-    ?? cleanTitle(anchor.getAttribute("title"))
-    ?? cleanTitle(anchor.getAttribute("aria-label"))
-    ?? cleanTitle(card?.querySelector("[title]")?.getAttribute("title"))
-    ?? cleanTitle(card?.querySelector("[aria-label]")?.getAttribute("aria-label"));
-}
-
-function runtimeSendErrorMessage(error: unknown): string {
-  const message = errorMessage(error);
-  return isExtensionContextInvalidated(error)
-    ? "Extension was reloaded. Refresh this YouTube tab."
-    : message
-      ? message
-      : "Local helper failed";
-}
-
-function createNativeNotesStore(runtime: ContentScriptRuntime): PersonalNotesStore {
-  return {
-    load() {
-      return new Promise((resolve, reject) => {
-        runtime.sendMessage({ type: "getPersonalNotes" }, (response: HostResponse | undefined) => {
-          const error = runtime.lastError;
-          if (error) {
-            reject(new Error(error.message ?? "Local helper failed"));
-            return;
-          }
-          if (!response || !response.ok) {
-            reject(new Error(response?.message ?? "Local helper failed"));
-            return;
-          }
-          resolve(response.type === "personalNotes" ? response.notes as PersonalNote[] : []);
-        });
-      });
-    },
-    save(notes) {
-      return new Promise((resolve, reject) => {
-        runtime.sendMessage({ type: "savePersonalNotes", notes }, (response: HostResponse | undefined) => {
-          const error = runtime.lastError;
-          if (error) {
-            reject(new Error(error.message ?? "Local helper failed"));
-            return;
-          }
-          if (!response || !response.ok) {
-            reject(new Error(response?.message ?? "Local helper failed"));
-            return;
-          }
-          resolve();
-        });
-      });
-    },
-  };
-}
 
 export function bootstrapContentScript(doc: Document, win: Window, runtime: ContentScriptRuntime): void {
   const bootstrapWindow = win as BootstrapWindow;
@@ -111,48 +48,13 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     if (!videoId) {
       return;
     }
-    try {
-      runtime.sendMessage({
-        type: "rememberContextMenuLink",
-        videoId,
-        url: anchor.href,
-        title: titleForRightClickedVideo(anchor),
-      }, () => {});
-    } catch {
-      // The context menu has no immediate page UI; the native context-menu path validates the target again.
-    }
+    const title = titleForRightClickedVideo(anchor);
+    rememberContextMenuLink(runtime, {
+      videoId,
+      url: anchor.href,
+      ...(title ? { title } : {}),
+    });
   }, true);
-
-  function enqueueVideo(
-    input: { videoId: string; url?: string; title?: string },
-    handlers: { onSuccess?(message: string): void; onError?(message: string): void } = {},
-  ): void {
-    try {
-      runtime.sendMessage({ type: "enqueueVideo", videoId: input.videoId, url: input.url, title: input.title }, (response: HostResponse | undefined) => {
-        const error = runtime.lastError;
-        if (error) {
-          handlers.onError?.(error.message ?? "Local helper failed");
-          return;
-        }
-        if (!response || !response.ok) {
-          handlers.onError?.(response?.message ?? "Local helper failed");
-          return;
-        }
-        handlers.onSuccess?.(response.type === "queueJob" ? response.message : "Queued");
-      });
-    } catch (error) {
-      handlers.onError?.(runtimeSendErrorMessage(error));
-    }
-  }
-
-  function markVideoWatched(videoId: string, captionLanguage: string, title?: string): void {
-    try {
-      const normalizedTitle = cleanTitle(title ?? doc.title);
-      runtime.sendMessage({ type: "markCachedVideoWatched", videoId, captionLanguage, ...(normalizedTitle ? { title: normalizedTitle } : {}) }, () => {});
-    } catch {
-      // Watch metadata is best-effort and must not interrupt subtitle playback.
-    }
-  }
 
   function markCurrentVideoMetadata(): void {
     const videoId = page.currentVideoId();
@@ -165,7 +67,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
       return;
     }
     lastMarkedVideoMetadataKey = key;
-    markVideoWatched(videoId, "en", title);
+    markVideoWatched(runtime, { videoId, captionLanguage: "en", title });
   }
 
   const ui = createCoachUi(doc, {
@@ -183,7 +85,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
         return;
       }
       ui.setStatus("Adding video to queue...");
-      enqueueVideo({ videoId, url: doc.location.href, title: doc.title }, {
+      enqueueVideo(runtime, { videoId, url: doc.location.href, title: doc.title }, {
         onSuccess(message) {
           ui.setStatus(message);
         },
@@ -216,7 +118,14 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
     generationClient: createRuntimeLearningGenerationClient(runtime),
     ui,
     currentVideoId: page.currentVideoId,
-    markVideoWatched,
+    markVideoWatched(videoId, captionLanguage) {
+      const title = cleanTitle(doc.title);
+      markVideoWatched(runtime, {
+        videoId,
+        captionLanguage,
+        ...(title ? { title } : {}),
+      });
+    },
     reconcilePlayerUi,
   });
 
