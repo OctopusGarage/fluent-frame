@@ -2,7 +2,7 @@ import type { HostRequest, HostResponse } from "@fluent-frame/shared";
 import type { HostConfig } from "./config.js";
 import { createQueueCoordinator } from "./queueCoordinator.js";
 import { createQueueEventLogger } from "./queueEventLogger.js";
-import { cacheReady, resolveVideoTitle } from "./queueSupport.js";
+import { createQueueSupport } from "./queueSupport.js";
 import { createQueueRuntime } from "./queueRuntime.js";
 
 type EnqueueVideoRequest = Extract<HostRequest, { type: "enqueueVideo" }>;
@@ -22,11 +22,11 @@ function queueErrorResponse(id: string, error: unknown): HostResponse {
 
 export function createQueueRequestHandler(config: HostConfig) {
   const runtime = createQueueRuntime(config);
+  const queueSupport = createQueueSupport(config);
   function requestCoordinator(requestId: string) {
     return createQueueCoordinator({
       store: runtime.store,
-      cacheReady: (input) => cacheReady(config, input),
-      resolveTitle: (videoId, title) => resolveVideoTitle(config, videoId, title),
+      ...queueSupport,
       startQueue: runtime.startQueue,
       log: createQueueEventLogger(runtime.logger, requestId),
     });

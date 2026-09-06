@@ -1,10 +1,13 @@
 import { readCachedResult, writeCachedResult } from "./cache.js";
 import type { HostConfig } from "./config.js";
 import { createLogger } from "./logger.js";
+import type { QueueCoordinatorDeps } from "./queueCoordinator.js";
 import { createRemoteCacheProvider } from "./remoteCache.js";
 import { fetchVideoTitle } from "./videoMetadata.js";
 
-export async function cacheReady(
+export type QueueSupport = Pick<QueueCoordinatorDeps, "cacheReady" | "resolveTitle">;
+
+async function cacheReady(
   config: HostConfig,
   input: { videoId: string; captionLanguage: string },
 ): Promise<boolean> {
@@ -26,7 +29,7 @@ export async function cacheReady(
   }
 }
 
-export async function resolveVideoTitle(
+async function resolveVideoTitle(
   config: HostConfig,
   videoId: string,
   title: string | undefined,
@@ -57,4 +60,11 @@ export async function resolveVideoTitle(
     });
     return undefined;
   }
+}
+
+export function createQueueSupport(config: HostConfig): QueueSupport {
+  return {
+    cacheReady: (input) => cacheReady(config, input),
+    resolveTitle: (videoId, title) => resolveVideoTitle(config, videoId, title),
+  };
 }
