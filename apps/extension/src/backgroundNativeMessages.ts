@@ -28,6 +28,13 @@ export type NativeMessageRuntime = NativeClientRuntime & {
   };
 };
 
+type BackgroundMessage = Record<string, unknown>;
+type NativeMessageHandler = (
+  runtime: NativeMessageRuntime,
+  message: BackgroundMessage,
+  sendResponse: (response: HostResponse) => void,
+) => true | false;
+
 function forwardNativeRequest(
   runtime: NativeMessageRuntime,
   request: HostRequest,
@@ -53,68 +60,63 @@ function forwardCreatedNativeRequest(
   }
 }
 
+const nativeMessageHandlers: Record<string, NativeMessageHandler> = {
+  getQueue: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
+  },
+  listCachedVideos: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createListCachedVideosRequest(), sendResponse);
+  },
+  markCachedVideoWatched: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(
+      runtime,
+      () => createMarkCachedVideoWatchedRequest({
+        videoId: message.videoId,
+        captionLanguage: message.captionLanguage,
+        title: message.title,
+      }),
+      sendResponse,
+    );
+  },
+  enqueueVideo: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(
+      runtime,
+      () => createEnqueueVideoRequest({
+        videoId: message.videoId,
+        url: message.url,
+        title: message.title,
+      }),
+      sendResponse,
+    );
+  },
+  removeQueueJob: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createRemoveQueueJobRequest(message.jobId), sendResponse);
+  },
+  retryQueueJob: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createRetryQueueJobRequest(message.jobId), sendResponse);
+  },
+  healthCheck: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createHealthCheckRequest(), sendResponse);
+  },
+  getPersonalNotes: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createGetPersonalNotesRequest(), sendResponse);
+  },
+  savePersonalNotes: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createSavePersonalNotesRequest(message.notes), sendResponse);
+  },
+  processCurrentVideo: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
+  },
+};
+
 export function registerNativeMessageListener(runtime: NativeMessageRuntime): void {
   runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!isBackgroundMessage(message)) {
       return false;
     }
 
-    if (message.type === "getQueue") {
-      return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
-    }
-
-    if (message.type === "listCachedVideos") {
-      return forwardNativeRequest(runtime, createListCachedVideosRequest(), sendResponse);
-    }
-
-    if (message.type === "markCachedVideoWatched") {
-      return forwardCreatedNativeRequest(
-        runtime,
-        () => createMarkCachedVideoWatchedRequest({
-          videoId: message.videoId,
-          captionLanguage: message.captionLanguage,
-          title: message.title,
-        }),
-        sendResponse,
-      );
-    }
-
-    if (message.type === "enqueueVideo") {
-      return forwardCreatedNativeRequest(
-        runtime,
-        () => createEnqueueVideoRequest({
-          videoId: message.videoId,
-          url: message.url,
-          title: message.title,
-        }),
-        sendResponse,
-      );
-    }
-
-    if (message.type === "removeQueueJob") {
-      return forwardCreatedNativeRequest(runtime, () => createRemoveQueueJobRequest(message.jobId), sendResponse);
-    }
-
-    if (message.type === "retryQueueJob") {
-      return forwardCreatedNativeRequest(runtime, () => createRetryQueueJobRequest(message.jobId), sendResponse);
-    }
-
-    if (message.type === "healthCheck") {
-      return forwardNativeRequest(runtime, createHealthCheckRequest(), sendResponse);
-    }
-
-    if (message.type === "getPersonalNotes") {
-      return forwardNativeRequest(runtime, createGetPersonalNotesRequest(), sendResponse);
-    }
-
-    if (message.type === "savePersonalNotes") {
-      return forwardCreatedNativeRequest(runtime, () => createSavePersonalNotesRequest(message.notes), sendResponse);
-    }
-
-    if (message.type === "processCurrentVideo") {
-      return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
-    }
-
-    return false;
+    const messageType = typeof message.type === "string" ? message.type : "";
+    const handler = nativeMessageHandlers[messageType];
+    return handler ? handler(runtime, message, sendResponse) : false;
   });
 }

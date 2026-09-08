@@ -415,6 +415,14 @@ test("extension native-message router does not depend on queue context-menu inte
   assert.doesNotMatch(source, /rememberContextMenuLink|rememberQueueContextMenuLink/);
 });
 
+test("extension native-message router keeps one-shot handlers behind a dispatch table", () => {
+  const nativeMessagesPath = resolve(repoRoot, "apps/extension/src/backgroundNativeMessages.ts");
+  const source = readFileSync(nativeMessagesPath, "utf8");
+
+  assert.match(source, /const nativeMessageHandlers: Record<string, NativeMessageHandler>/);
+  assert.doesNotMatch(source, /if\s*\(\s*message\.type\s*===/);
+});
+
 test("extension runtime entrypoint does not re-export streaming internals", () => {
   const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
   const source = readFileSync(backgroundPath, "utf8");
