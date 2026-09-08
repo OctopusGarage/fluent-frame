@@ -11,7 +11,6 @@ import {
   createRetryQueueJobRequest,
   createSavePersonalNotesRequest,
 } from "./backgroundRequests.js";
-import { rememberQueueContextMenuLink } from "./backgroundQueueContextMenus.js";
 import {
   createExtensionErrorResponse,
   createErrorResponse,
@@ -55,21 +54,20 @@ function forwardCreatedNativeRequest(
 }
 
 export function registerNativeMessageListener(runtime: NativeMessageRuntime): void {
-  runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (isBackgroundMessage(message) && message.type === "rememberContextMenuLink") {
-      sendResponse(rememberQueueContextMenuLink(sender, message));
+  runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!isBackgroundMessage(message)) {
       return false;
     }
 
-    if (isBackgroundMessage(message) && message.type === "getQueue") {
+    if (message.type === "getQueue") {
       return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "listCachedVideos") {
+    if (message.type === "listCachedVideos") {
       return forwardNativeRequest(runtime, createListCachedVideosRequest(), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "markCachedVideoWatched") {
+    if (message.type === "markCachedVideoWatched") {
       return forwardCreatedNativeRequest(
         runtime,
         () => createMarkCachedVideoWatchedRequest({
@@ -81,7 +79,7 @@ export function registerNativeMessageListener(runtime: NativeMessageRuntime): vo
       );
     }
 
-    if (isBackgroundMessage(message) && message.type === "enqueueVideo") {
+    if (message.type === "enqueueVideo") {
       return forwardCreatedNativeRequest(
         runtime,
         () => createEnqueueVideoRequest({
@@ -93,27 +91,27 @@ export function registerNativeMessageListener(runtime: NativeMessageRuntime): vo
       );
     }
 
-    if (isBackgroundMessage(message) && message.type === "removeQueueJob") {
+    if (message.type === "removeQueueJob") {
       return forwardCreatedNativeRequest(runtime, () => createRemoveQueueJobRequest(message.jobId), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "retryQueueJob") {
+    if (message.type === "retryQueueJob") {
       return forwardCreatedNativeRequest(runtime, () => createRetryQueueJobRequest(message.jobId), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "healthCheck") {
+    if (message.type === "healthCheck") {
       return forwardNativeRequest(runtime, createHealthCheckRequest(), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "getPersonalNotes") {
+    if (message.type === "getPersonalNotes") {
       return forwardNativeRequest(runtime, createGetPersonalNotesRequest(), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "savePersonalNotes") {
+    if (message.type === "savePersonalNotes") {
       return forwardCreatedNativeRequest(runtime, () => createSavePersonalNotesRequest(message.notes), sendResponse);
     }
 
-    if (isBackgroundMessage(message) && message.type === "processCurrentVideo") {
+    if (message.type === "processCurrentVideo") {
       return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
     }
 

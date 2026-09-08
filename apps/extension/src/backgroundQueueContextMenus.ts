@@ -1,4 +1,5 @@
 import type { HostResponse } from "@fluent-frame/shared";
+import { isBackgroundMessage } from "./backgroundMessages.js";
 import { createEnqueueVideoRequest } from "./backgroundRequests.js";
 import { sendNativeRequest, type NativeClientRuntime } from "./nativeHostClient.js";
 import { createRequestId } from "./requestId.js";
@@ -16,6 +17,11 @@ export type QueueContextMenuChromeApi = {
   runtime: NativeClientRuntime & {
     onInstalled?: { addListener(callback: () => void): void };
     onStartup?: { addListener(callback: () => void): void };
+    onMessage?: {
+      addListener(
+        callback: (message: unknown, sender: unknown, sendResponse: (response: HostResponse) => void) => boolean,
+      ): void;
+    };
   };
   contextMenus?: ContextMenusApi;
 };
@@ -47,7 +53,7 @@ function enqueueContextMenuVideo(
   });
 }
 
-export function rememberQueueContextMenuLink(sender: unknown, message: Record<string, unknown>): HostResponse {
+function rememberQueueContextMenuLink(sender: unknown, message: Record<string, unknown>): HostResponse {
   const tabId = (sender as { tab?: { id?: unknown } }).tab?.id;
   if (typeof tabId !== "number") {
     return { id: createRequestId(), ok: true, type: "cacheMiss" };
@@ -66,6 +72,17 @@ export function rememberQueueContextMenuLink(sender: unknown, message: Record<st
     rememberedAt: Date.now(),
   });
   return { id: createRequestId(), ok: true, type: "cacheMiss" };
+}
+
+function registerRememberedContextMenuLinkListener(runtime: QueueContextMenuChromeApi["runtime"]): void {
+  runtime.onMessage?.addListener((message, sender, sendResponse) => {
+    if (!isBackgroundMessage(message) || message.type !== "rememberContextMenuLink") {
+      return false;
+    }
+
+    sendResponse(rememberQueueContextMenuLink(sender, message));
+    return false;
+  });
 }
 
 function rememberedLinkForTab(tabId: number | undefined): RememberedContextLink | undefined {
@@ -117,6 +134,7 @@ export function registerQueueContextMenus(chromeApi: QueueContextMenuChromeApi):
   createMenus();
   chromeApi.runtime.onInstalled?.addListener(createMenus);
   chromeApi.runtime.onStartup?.addListener(createMenus);
+  registerRememberedContextMenuLinkListener(chromeApi.runtime);
   menus.onClicked.addListener((info, tab) => {
     const menuItemId = String(info.menuItemId);
     if (!ENQUEUE_CONTEXT_MENU_IDS.has(menuItemId)) {
