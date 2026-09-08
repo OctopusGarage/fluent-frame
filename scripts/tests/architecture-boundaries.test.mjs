@@ -419,7 +419,9 @@ test("extension native-message router keeps one-shot handlers behind a dispatch 
   const nativeMessagesPath = resolve(repoRoot, "apps/extension/src/backgroundNativeMessages.ts");
   const source = readFileSync(nativeMessagesPath, "utf8");
 
-  assert.match(source, /const nativeMessageHandlers: Record<string, NativeMessageHandler>/);
+  assert.match(source, /type NativeBackgroundMessage =/);
+  assert.match(source, /satisfies NativeMessageHandlers/);
+  assert.doesNotMatch(source, /Record<string, NativeMessageHandler>/);
   assert.doesNotMatch(source, /if\s*\(\s*message\.type\s*===/);
 });
 

@@ -29,11 +29,27 @@ export type NativeMessageRuntime = NativeClientRuntime & {
 };
 
 type BackgroundMessage = Record<string, unknown>;
-type NativeMessageHandler = (
+type NativeBackgroundMessage =
+  | { type: "getQueue" }
+  | { type: "listCachedVideos" }
+  | { type: "markCachedVideoWatched"; videoId: unknown; captionLanguage?: unknown; title?: unknown }
+  | { type: "enqueueVideo"; videoId: unknown; url?: unknown; title?: unknown }
+  | { type: "removeQueueJob"; jobId: unknown }
+  | { type: "retryQueueJob"; jobId: unknown }
+  | { type: "healthCheck" }
+  | { type: "getPersonalNotes" }
+  | { type: "savePersonalNotes"; notes: unknown }
+  | { type: "processCurrentVideo"; videoId: unknown };
+type NativeMessageHandler<Message extends NativeBackgroundMessage = NativeBackgroundMessage> = (
   runtime: NativeMessageRuntime,
-  message: BackgroundMessage,
+  message: Message,
   sendResponse: (response: HostResponse) => void,
 ) => true | false;
+type NativeMessageHandlers = {
+  [MessageType in NativeBackgroundMessage["type"]]: NativeMessageHandler<
+    Extract<NativeBackgroundMessage, { type: MessageType }>
+  >;
+};
 
 function forwardNativeRequest(
   runtime: NativeMessageRuntime,
@@ -60,7 +76,7 @@ function forwardCreatedNativeRequest(
   }
 }
 
-const nativeMessageHandlers: Record<string, NativeMessageHandler> = {
+const nativeMessageHandlers = {
   getQueue: (runtime, _message, sendResponse) => {
     return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
   },
@@ -107,7 +123,11 @@ const nativeMessageHandlers: Record<string, NativeMessageHandler> = {
   processCurrentVideo: (runtime, message, sendResponse) => {
     return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
   },
-};
+} satisfies NativeMessageHandlers;
+
+function isNativeBackgroundMessage(message: BackgroundMessage): message is NativeBackgroundMessage {
+  return typeof message.type === "string" && message.type in nativeMessageHandlers;
+}
 
 export function registerNativeMessageListener(runtime: NativeMessageRuntime): void {
   runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -115,8 +135,11 @@ export function registerNativeMessageListener(runtime: NativeMessageRuntime): vo
       return false;
     }
 
-    const messageType = typeof message.type === "string" ? message.type : "";
-    const handler = nativeMessageHandlers[messageType];
-    return handler ? handler(runtime, message, sendResponse) : false;
+    if (!isNativeBackgroundMessage(message)) {
+      return false;
+    }
+
+    const handler = nativeMessageHandlers[message.type] as NativeMessageHandler<typeof message>;
+    return handler(runtime, message, sendResponse);
   });
 }
