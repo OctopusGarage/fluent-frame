@@ -11,7 +11,6 @@ import {
   createRetryQueueJobRequest,
   createSavePersonalNotesRequest,
 } from "./backgroundRequests.js";
-import { rememberQueueContextMenuLink } from "./backgroundQueueContextMenus.js";
 import {
   createExtensionErrorResponse,
   createErrorResponse,
@@ -27,6 +26,29 @@ export type NativeMessageRuntime = NativeClientRuntime & {
       callback: (message: unknown, sender: unknown, sendResponse: (response: HostResponse) => void) => boolean,
     ): void;
   };
+};
+
+type BackgroundMessage = Record<string, unknown>;
+type NativeBackgroundMessage =
+  | { type: "getQueue" }
+  | { type: "listCachedVideos" }
+  | { type: "markCachedVideoWatched"; videoId: unknown; captionLanguage?: unknown; title?: unknown }
+  | { type: "enqueueVideo"; videoId: unknown; url?: unknown; title?: unknown }
+  | { type: "removeQueueJob"; jobId: unknown }
+  | { type: "retryQueueJob"; jobId: unknown }
+  | { type: "healthCheck" }
+  | { type: "getPersonalNotes" }
+  | { type: "savePersonalNotes"; notes: unknown }
+  | { type: "processCurrentVideo"; videoId: unknown };
+type NativeMessageHandler<Message extends NativeBackgroundMessage = NativeBackgroundMessage> = (
+  runtime: NativeMessageRuntime,
+  message: Message,
+  sendResponse: (response: HostResponse) => void,
+) => true | false;
+type NativeMessageHandlers = {
+  [MessageType in NativeBackgroundMessage["type"]]: NativeMessageHandler<
+    Extract<NativeBackgroundMessage, { type: MessageType }>
+  >;
 };
 
 function forwardNativeRequest(
@@ -54,69 +76,70 @@ function forwardCreatedNativeRequest(
   }
 }
 
+const nativeMessageHandlers = {
+  getQueue: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
+  },
+  listCachedVideos: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createListCachedVideosRequest(), sendResponse);
+  },
+  markCachedVideoWatched: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(
+      runtime,
+      () => createMarkCachedVideoWatchedRequest({
+        videoId: message.videoId,
+        captionLanguage: message.captionLanguage,
+        title: message.title,
+      }),
+      sendResponse,
+    );
+  },
+  enqueueVideo: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(
+      runtime,
+      () => createEnqueueVideoRequest({
+        videoId: message.videoId,
+        url: message.url,
+        title: message.title,
+      }),
+      sendResponse,
+    );
+  },
+  removeQueueJob: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createRemoveQueueJobRequest(message.jobId), sendResponse);
+  },
+  retryQueueJob: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createRetryQueueJobRequest(message.jobId), sendResponse);
+  },
+  healthCheck: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createHealthCheckRequest(), sendResponse);
+  },
+  getPersonalNotes: (runtime, _message, sendResponse) => {
+    return forwardNativeRequest(runtime, createGetPersonalNotesRequest(), sendResponse);
+  },
+  savePersonalNotes: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createSavePersonalNotesRequest(message.notes), sendResponse);
+  },
+  processCurrentVideo: (runtime, message, sendResponse) => {
+    return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
+  },
+} satisfies NativeMessageHandlers;
+
+function isNativeBackgroundMessage(message: BackgroundMessage): message is NativeBackgroundMessage {
+  return typeof message.type === "string" && message.type in nativeMessageHandlers;
+}
+
 export function registerNativeMessageListener(runtime: NativeMessageRuntime): void {
-  runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (isBackgroundMessage(message) && message.type === "rememberContextMenuLink") {
-      sendResponse(rememberQueueContextMenuLink(sender, message));
+  runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!isBackgroundMessage(message)) {
       return false;
     }
 
-    if (isBackgroundMessage(message) && message.type === "getQueue") {
-      return forwardNativeRequest(runtime, createGetQueueRequest(), sendResponse);
+    if (!isNativeBackgroundMessage(message)) {
+      return false;
     }
 
-    if (isBackgroundMessage(message) && message.type === "listCachedVideos") {
-      return forwardNativeRequest(runtime, createListCachedVideosRequest(), sendResponse);
-    }
-
-    if (isBackgroundMessage(message) && message.type === "markCachedVideoWatched") {
-      return forwardCreatedNativeRequest(
-        runtime,
-        () => createMarkCachedVideoWatchedRequest({
-          videoId: message.videoId,
-          captionLanguage: message.captionLanguage,
-          title: message.title,
-        }),
-        sendResponse,
-      );
-    }
-
-    if (isBackgroundMessage(message) && message.type === "enqueueVideo") {
-      return forwardCreatedNativeRequest(
-        runtime,
-        () => createEnqueueVideoRequest({
-          videoId: message.videoId,
-          url: message.url,
-          title: message.title,
-        }),
-        sendResponse,
-      );
-    }
-
-    if (isBackgroundMessage(message) && message.type === "removeQueueJob") {
-      return forwardCreatedNativeRequest(runtime, () => createRemoveQueueJobRequest(message.jobId), sendResponse);
-    }
-
-    if (isBackgroundMessage(message) && message.type === "retryQueueJob") {
-      return forwardCreatedNativeRequest(runtime, () => createRetryQueueJobRequest(message.jobId), sendResponse);
-    }
-
-    if (isBackgroundMessage(message) && message.type === "healthCheck") {
-      return forwardNativeRequest(runtime, createHealthCheckRequest(), sendResponse);
-    }
-
-    if (isBackgroundMessage(message) && message.type === "getPersonalNotes") {
-      return forwardNativeRequest(runtime, createGetPersonalNotesRequest(), sendResponse);
-    }
-
-    if (isBackgroundMessage(message) && message.type === "savePersonalNotes") {
-      return forwardCreatedNativeRequest(runtime, () => createSavePersonalNotesRequest(message.notes), sendResponse);
-    }
-
-    if (isBackgroundMessage(message) && message.type === "processCurrentVideo") {
-      return forwardCreatedNativeRequest(runtime, () => createProcessVideoRequest(message.videoId), sendResponse);
-    }
-
-    return false;
+    const handler = nativeMessageHandlers[message.type] as NativeMessageHandler<typeof message>;
+    return handler(runtime, message, sendResponse);
   });
 }

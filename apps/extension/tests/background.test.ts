@@ -46,7 +46,7 @@ function createContextMenusMock() {
 }
 
 function createRuntimeMock(response: unknown | NativeResponseFactory, lastError?: { message?: string }) {
-  let listener: RuntimeMessageCallback | undefined;
+  const listeners: RuntimeMessageCallback[] = [];
   const runtime: ExtensionRuntime & {
     sendNativeMessage: ReturnType<
       typeof vi.fn<(_hostName: string, _request: unknown, callback: (response: unknown) => void) => void>
@@ -58,7 +58,7 @@ function createRuntimeMock(response: unknown | NativeResponseFactory, lastError?
     lastError,
     onMessage: {
       addListener: vi.fn((callback: RuntimeMessageCallback) => {
-        listener = callback;
+        listeners.push(callback);
       }),
     },
     sendNativeMessage: vi.fn((_hostName: string, request: unknown, callback: (response: unknown) => void) => {
@@ -69,10 +69,12 @@ function createRuntimeMock(response: unknown | NativeResponseFactory, lastError?
   return {
     runtime,
     getListener() {
-      if (!listener) {
+      if (listeners.length === 0) {
         throw new Error("Listener was not registered");
       }
-      return listener;
+      return (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => {
+        return listeners.some((listener) => listener(message, sender, sendResponse));
+      };
     },
   };
 }

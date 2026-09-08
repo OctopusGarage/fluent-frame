@@ -406,6 +406,25 @@ test("extension runtime entrypoint does not re-export queue context-menu interna
   assert.deepEqual(forbiddenReExports, []);
 });
 
+test("extension native-message router does not depend on queue context-menu internals", () => {
+  const nativeMessagesPath = resolve(repoRoot, "apps/extension/src/backgroundNativeMessages.ts");
+  const source = readFileSync(nativeMessagesPath, "utf8");
+  const localRuntimeSpecifiers = findRuntimeImportSpecifiers(source).filter((specifier) => specifier.startsWith("."));
+
+  assert.ok(!localRuntimeSpecifiers.includes("./backgroundQueueContextMenus.js"));
+  assert.doesNotMatch(source, /rememberContextMenuLink|rememberQueueContextMenuLink/);
+});
+
+test("extension native-message router keeps one-shot handlers behind a dispatch table", () => {
+  const nativeMessagesPath = resolve(repoRoot, "apps/extension/src/backgroundNativeMessages.ts");
+  const source = readFileSync(nativeMessagesPath, "utf8");
+
+  assert.match(source, /type NativeBackgroundMessage =/);
+  assert.match(source, /satisfies NativeMessageHandlers/);
+  assert.doesNotMatch(source, /Record<string, NativeMessageHandler>/);
+  assert.doesNotMatch(source, /if\s*\(\s*message\.type\s*===/);
+});
+
 test("extension runtime entrypoint does not re-export streaming internals", () => {
   const backgroundPath = resolve(repoRoot, "apps/extension/src/background.ts");
   const source = readFileSync(backgroundPath, "utf8");
