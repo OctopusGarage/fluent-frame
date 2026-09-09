@@ -540,6 +540,16 @@ test("extension popup entrypoint delegates subtitle library workflows to popup l
   assert.doesNotMatch(source, /subtitle-library-(?:summary|list)|listCachedVideos/);
 });
 
+test("extension content script delegates native personal-notes transport", () => {
+  const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
+  const source = readFileSync(contentPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+
+  assert.ok(runtimeSpecifiers.includes("./nativePersonalNotesStore.js"));
+  assert.doesNotMatch(source, /type:\s*["'](?:getPersonalNotes|savePersonalNotes)["']/);
+  assert.doesNotMatch(source, /function\s+createNativeNotesStore\s*\(/);
+});
+
 test("popup library module interface is recorded in architecture docs", () => {
   const adrPath = resolve(repoRoot, "docs/adr/0001-deepen-local-first-extension-modules.md");
   const contextPath = resolve(repoRoot, "CONTEXT.md");

@@ -1,8 +1,9 @@
-import type { HostResponse, PersonalNote } from "@fluent-frame/shared";
+import type { HostResponse } from "@fluent-frame/shared";
 import { errorMessage, isExtensionContextInvalidated } from "./chromeRuntimeErrors.js";
 import { createVideoLearningSession } from "./generationSession.js";
 import { createRuntimeLearningGenerationClient, type ContentScriptRuntime } from "./learningGenerationClient.js";
-import { createCoachUi, type PersonalNotesStore } from "./ui.js";
+import { createNativePersonalNotesStore } from "./nativePersonalNotesStore.js";
+import { createCoachUi } from "./ui.js";
 import { extractVideoIdFromUrl } from "./video.js";
 import { createYouTubePage } from "./youtubePage.js";
 export type { ContentScriptRuntime };
@@ -44,43 +45,6 @@ function runtimeSendErrorMessage(error: unknown): string {
     : message
       ? message
       : "Local helper failed";
-}
-
-function createNativeNotesStore(runtime: ContentScriptRuntime): PersonalNotesStore {
-  return {
-    load() {
-      return new Promise((resolve, reject) => {
-        runtime.sendMessage({ type: "getPersonalNotes" }, (response: HostResponse | undefined) => {
-          const error = runtime.lastError;
-          if (error) {
-            reject(new Error(error.message ?? "Local helper failed"));
-            return;
-          }
-          if (!response || !response.ok) {
-            reject(new Error(response?.message ?? "Local helper failed"));
-            return;
-          }
-          resolve(response.type === "personalNotes" ? response.notes as PersonalNote[] : []);
-        });
-      });
-    },
-    save(notes) {
-      return new Promise((resolve, reject) => {
-        runtime.sendMessage({ type: "savePersonalNotes", notes }, (response: HostResponse | undefined) => {
-          const error = runtime.lastError;
-          if (error) {
-            reject(new Error(error.message ?? "Local helper failed"));
-            return;
-          }
-          if (!response || !response.ok) {
-            reject(new Error(response?.message ?? "Local helper failed"));
-            return;
-          }
-          resolve();
-        });
-      });
-    },
-  };
 }
 
 export function bootstrapContentScript(doc: Document, win: Window, runtime: ContentScriptRuntime): void {
@@ -169,7 +133,7 @@ export function bootstrapContentScript(doc: Document, win: Window, runtime: Cont
   }
 
   const ui = createCoachUi(doc, {
-    notesStore: createNativeNotesStore(runtime),
+    notesStore: createNativePersonalNotesStore(runtime),
     onJumpToMs(startMs) {
       const video = page.mainVideo();
       if (video) {
