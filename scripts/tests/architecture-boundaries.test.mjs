@@ -550,6 +550,16 @@ test("extension content script delegates native personal-notes transport", () =>
   assert.doesNotMatch(source, /function\s+createNativeNotesStore\s*\(/);
 });
 
+test("extension content script delegates queue and watched-video transport", () => {
+  const contentPath = resolve(repoRoot, "apps/extension/src/content.ts");
+  const source = readFileSync(contentPath, "utf8");
+  const runtimeSpecifiers = findRuntimeImportSpecifiers(source);
+
+  assert.ok(runtimeSpecifiers.includes("./contentVideoActions.js"));
+  assert.doesNotMatch(source, /type:\s*["'](?:enqueueVideo|markCachedVideoWatched|rememberContextMenuLink)["']/);
+  assert.doesNotMatch(source, /HostResponse|runtimeSendErrorMessage/);
+});
+
 test("popup library module interface is recorded in architecture docs", () => {
   const adrPath = resolve(repoRoot, "docs/adr/0001-deepen-local-first-extension-modules.md");
   const contextPath = resolve(repoRoot, "CONTEXT.md");
