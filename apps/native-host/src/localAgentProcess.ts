@@ -17,6 +17,7 @@ function runAgentProcess(
     const child = spawn(executablePath, args, { cwd: options.cwd, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
+    let stdinError: Error | undefined;
     const timeout = setTimeout(() => {
       if (settled) {
         return;
@@ -30,6 +31,11 @@ function runAgentProcess(
     });
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
+    });
+    child.stdin.on("error", (error: Error) => {
+      // Keep consuming late errors, but wait for close to retain CLI diagnostics.
+      // The existing timeout still bounds a child that does not exit.
+      stdinError ??= error;
     });
     child.on("error", (error: NodeJS.ErrnoException) => {
       if (settled) {
@@ -46,7 +52,11 @@ function runAgentProcess(
       settled = true;
       clearTimeout(timeout);
       if (code === 0) {
-        resolve(options.stdioMode === "stdout-json" ? stdout : "");
+        if (stdinError) {
+          reject(stdinError);
+        } else {
+          resolve(options.stdioMode === "stdout-json" ? stdout : "");
+        }
       } else {
         reject(new Error(stderr.trim() || `${options.displayName.toLowerCase()} exited with ${code}`));
       }
