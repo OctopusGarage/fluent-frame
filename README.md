@@ -338,8 +338,26 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm test:coverage
 pnpm verify:local
 ```
+
+`pnpm test:coverage` runs every workspace package test and the script tests, then
+enforces at least **80% line coverage** over one executable-source manifest.
+The manifest includes JS/TS under every workspace package's `src/` and top-level
+operational `scripts/*.mjs`. Declarations, HTML/CSS assets, generated output, tests
+and coverage tooling are excluded. An omitted source file fails the check.
+
+Package reports use Vitest V8; script reports use [c8 `--all`](https://github.com/bcoe/c8#checking-for-full-source-coverage-using---all)
+so scripts not loaded by tests still count as uncovered. Reports merge through
+Istanbul's file coverage map, deduplicating source identities and summing covered
+and total lines instead of averaging percentages. The combined map and source
+manifest are written to `coverage/coverage-final.json` and
+`coverage/workspace-summary.json`. Branch and function coverage are reported
+separately; the enforced 80% threshold applies to lines. Both local verification
+and Linux/macOS CI run this gate. Script CLI tests use a temporary home and fake
+external commands; they do not register a host in the operator's Chrome profile,
+open a real browser, contact providers, or invoke a live agent.
 
 Run the browser E2E test with a real Chrome extension context:
 

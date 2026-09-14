@@ -3,6 +3,6 @@ set -eu
 
 pnpm lint
 pnpm typecheck
-pnpm test
+pnpm test:coverage
 pnpm build
 pnpm audit
