@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { promisify } from "node:util";
 import { WORKFLOW_VERSION, type HostHealth } from "@fluent-frame/shared";
@@ -9,14 +10,14 @@ const execFileAsync = promisify(execFile);
 async function executableExists(path: string): Promise<boolean> {
   if (!path.includes("/")) {
     try {
-      await execFileAsync("/usr/bin/env", ["sh", "-lc", `command -v ${path}`]);
+      await execFileAsync("/usr/bin/env", ["sh", "-c", "command -v -- \"$1\"", "sh", path]);
       return true;
     } catch {
       return false;
     }
   }
   try {
-    await access(path);
+    await access(path, constants.X_OK);
     return true;
   } catch {
     return false;
