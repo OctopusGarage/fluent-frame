@@ -629,6 +629,108 @@ describe("background helpers", () => {
 
   });
 
+  it("ignores unrelated content ports and non-streaming port messages", () => {
+    let contentConnectListener: ((port: MockPort) => void) | undefined;
+    const nativePort = createMockPort("native");
+    const unrelatedPort = createMockPort("another-extension-port");
+    const contentPort = createMockPort("fluent-frame-process-video");
+    const runtime = {
+      lastError: undefined,
+      sendNativeMessage: vi.fn(),
+      connectNative: vi.fn(() => nativePort),
+      onMessage: {
+        addListener: vi.fn(),
+      },
+      onConnect: {
+        addListener: vi.fn((callback: (port: MockPort) => void) => {
+          contentConnectListener = callback;
+        }),
+      },
+    } satisfies ExtensionRuntime;
+
+    registerBackgroundListener(runtime);
+    contentConnectListener?.(unrelatedPort);
+    contentConnectListener?.(contentPort);
+    unrelatedPort.emitMessage({ type: "processCurrentVideoStream", videoId: "dQw4w9WgXcQ" });
+    contentPort.emitMessage({ type: "processCurrentVideo", videoId: "dQw4w9WgXcQ" });
+    contentPort.emitMessage({ event: "heartbeat" });
+
+    expect(runtime.connectNative).not.toHaveBeenCalled();
+    expect(nativePort.postMessage).not.toHaveBeenCalled();
+    expect(contentPort.postMessage).not.toHaveBeenCalled();
+    expect(unrelatedPort.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed streaming video IDs before opening a native port", () => {
+    let contentConnectListener: ((port: MockPort) => void) | undefined;
+    const nativePort = createMockPort("native");
+    const contentPort = createMockPort("fluent-frame-process-video");
+    const runtime = {
+      lastError: undefined,
+      sendNativeMessage: vi.fn(),
+      connectNative: vi.fn(() => nativePort),
+      onMessage: {
+        addListener: vi.fn(),
+      },
+      onConnect: {
+        addListener: vi.fn((callback: (port: MockPort) => void) => {
+          contentConnectListener = callback;
+        }),
+      },
+    } satisfies ExtensionRuntime;
+
+    registerBackgroundListener(runtime);
+    contentConnectListener?.(contentPort);
+    contentPort.emitMessage({ type: "processCurrentVideoStream", videoId: "not a youtube id" });
+
+    expect(runtime.connectNative).not.toHaveBeenCalled();
+    expect(contentPort.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      ok: false,
+      type: "error",
+      code: "EXTENSION_ERROR",
+      message: "Invalid YouTube video ID",
+    }));
+  });
+
+  it("reports a native streaming disconnect before any terminal response", () => {
+    let contentConnectListener: ((port: MockPort) => void) | undefined;
+    const nativePort = createMockPort("native");
+    const contentPort = createMockPort("fluent-frame-process-video");
+    const runtime = {
+      lastError: undefined,
+      sendNativeMessage: vi.fn(),
+      connectNative: vi.fn(() => nativePort),
+      onMessage: {
+        addListener: vi.fn(),
+      },
+      onConnect: {
+        addListener: vi.fn((callback: (port: MockPort) => void) => {
+          contentConnectListener = callback;
+        }),
+      },
+    } satisfies ExtensionRuntime;
+
+    registerBackgroundListener(runtime);
+    contentConnectListener?.(contentPort);
+    contentPort.emitMessage({ type: "processCurrentVideoStream", videoId: "dQw4w9WgXcQ" });
+    const request = nativePort.postMessage.mock.calls[0]?.[0] as { id: string };
+    nativePort.emitMessage({
+      id: request.id,
+      ok: true,
+      type: "progress",
+      progress: { stage: "agent", message: "Generating part 1 of 2" },
+    });
+    nativePort.emitDisconnect();
+
+    expect(contentPort.postMessage).toHaveBeenCalledWith({
+      id: request.id,
+      ok: false,
+      type: "error",
+      code: "NATIVE_HOST_DISCONNECTED",
+      message: "Native host disconnected",
+    });
+  });
+
   it("disconnects the native streaming port when the content port closes before completion", () => {
     let contentConnectListener: ((port: MockPort) => void) | undefined;
     const nativePort = createMockPort("native");
