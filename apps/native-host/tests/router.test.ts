@@ -103,6 +103,63 @@ describe("handleRequest", () => {
     }
   });
 
+  it("treats configured executable names as literal health-check values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-health-literal-"));
+    const previousEnv = { ...process.env };
+    const previousCwd = process.cwd();
+    process.chdir(dir);
+    process.env.FF_YTDLP_PATH = "missing-yt-dlp; touch ff-health-injected";
+    process.env.FF_CODEX_PATH = "missing-codex";
+    process.env.FF_CLAUDE_PATH = "missing-claude";
+
+    try {
+      await expect(handleRequest({ id: "health-literal-1", type: "healthCheck" })).resolves.toMatchObject({
+        id: "health-literal-1",
+        ok: true,
+        type: "health",
+        health: {
+          ytDlpPath: "missing-yt-dlp; touch ff-health-injected",
+          checks: {
+            ytDlp: false,
+          },
+        },
+      });
+      await expect(readFile(join(dir, "ff-health-injected"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      process.chdir(previousCwd);
+      process.env = previousEnv;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("requires explicitly configured executable paths to be executable", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ff-router-health-executable-"));
+    const previousEnv = { ...process.env };
+    const ytDlpPath = join(dir, "yt-dlp");
+    await writeFile(ytDlpPath, "#!/bin/sh\n", "utf8");
+    await chmod(ytDlpPath, 0o644);
+    process.env.FF_YTDLP_PATH = ytDlpPath;
+    process.env.FF_CODEX_PATH = join(dir, "missing-codex");
+    process.env.FF_CLAUDE_PATH = join(dir, "missing-claude");
+
+    try {
+      await expect(handleRequest({ id: "health-executable-1", type: "healthCheck" })).resolves.toMatchObject({
+        id: "health-executable-1",
+        ok: true,
+        type: "health",
+        health: {
+          ytDlpPath,
+          checks: {
+            ytDlp: false,
+          },
+        },
+      });
+    } finally {
+      process.env = previousEnv;
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("reports remote cache health without exposing the configured token", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ff-router-health-remote-"));
     const previousEnv = { ...process.env };
