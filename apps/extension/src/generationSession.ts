@@ -94,15 +94,13 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
   }
 
   function finishFailure(videoId: string, startedMs: number, message: string): void {
-    stopGenerationProgress();
-    activeGeneration = undefined;
+    cancel();
     record(videoId, startedMs, "failed");
     deps.ui.setError(message);
   }
 
   function finishSuccess(videoId: string, startedMs: number, result: LearningSubtitleResult): void {
-    stopGenerationProgress();
-    activeGeneration = undefined;
+    cancel();
     const elapsedMs = record(videoId, startedMs, "success");
     deps.ui.setResult(result, `Learning subtitles ready in ${formatDuration(elapsedMs)}`);
     deps.markVideoWatched?.(result.videoId, result.sourceLanguage);
@@ -110,8 +108,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
   }
 
   function finishIncomplete(videoId: string, startedMs: number, result: LearningSubtitleResult, meta: LearningGenerationResultMeta): void {
-    stopGenerationProgress();
-    activeGeneration = undefined;
+    cancel();
     record(videoId, startedMs, "failed");
     const detail = meta.fallbackReason ? `: ${meta.fallbackReason}` : "";
     const message = meta.mode === "sourceFallback"
@@ -198,13 +195,14 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
         if (!activeGeneration || activeGeneration.requestSequence !== requestSequence || activeGeneration.disconnecting) {
           return;
         }
-        stopGenerationProgress();
-        activeGeneration = undefined;
+        cancel();
         deps.ui.setError("Local helper disconnected before generation finished.");
       },
     });
     if (activeGeneration?.requestSequence === requestSequence) {
       activeGeneration.request = request;
+    } else {
+      request.disconnect();
     }
   }
 
@@ -214,6 +212,7 @@ export function createVideoLearningSession(deps: VideoLearningSessionDeps): Vide
       return;
     }
     cancel();
+    lastVideoId = videoId;
     const requestSequence = latestRequestSequence + 1;
     latestRequestSequence = requestSequence;
     const startedMs = Date.now();
