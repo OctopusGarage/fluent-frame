@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -198,6 +198,35 @@ describe("QueueStore", () => {
       expect(retried.message).toBe("Already ready");
       expect(retried.job.status).toBe("done");
       expect((await store.getQueue()).jobs[0]?.status).toBe("done");
+    });
+  });
+
+  it.each(["getQueue", "enqueue"] as const)("preserves an unreadable queue and releases its lock after %s fails", async (operation) => {
+    await withTempDir(async (dir) => {
+      const queueFile = join(dir, "jobs.json");
+      const store = createQueueStore(queueFile);
+      const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      const original = await readFile(queueFile, "utf8");
+      await chmod(queueFile, 0o000);
+      let outcome: unknown;
+      try {
+        outcome = await (operation === "getQueue"
+          ? store.getQueue()
+          : store.enqueue({ videoId: "o3RPPjzciqo", captionLanguage: "en" })
+        ).then(() => "unexpected success", (error: unknown) => error);
+      } finally {
+        await chmod(queueFile, 0o600).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      }
+
+      expect(outcome).toMatchObject({ code: "EACCES" });
+      await expect(readFile(queueFile, "utf8")).resolves.toBe(original);
+      await expect(readFile(`${queueFile}.corrupt`, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(`${queueFile}.lock`, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      expect((await store.getQueue()).jobs).toEqual([job]);
+      await store.enqueue({ videoId: "o3RPPjzciqo", captionLanguage: "en" });
+      expect((await store.getQueue()).jobs).toHaveLength(2);
     });
   });
 

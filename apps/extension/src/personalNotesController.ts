@@ -36,15 +36,6 @@ function defaultNotesStore(): PersonalNotesStore {
   };
 }
 
-async function loadLatestNotes(store: PersonalNotesStore, fallback: PersonalNote[]): Promise<PersonalNote[]> {
-  try {
-    const notes = await store.load();
-    return Array.isArray(notes) ? notes : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 function upsertNote(notes: PersonalNote[], nextNote: PersonalNote): { notes: PersonalNote[]; existed: boolean } {
   const existingIndex = notes.findIndex((note) => note.id === nextNote.id);
   if (existingIndex >= 0) {
@@ -101,7 +92,7 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
       render();
       deps.setStatus(optimistic.existed ? "Note already saved" : "Adding note...");
       try {
-        const latest = await loadLatestNotes(store, personalNotes);
+        const latest = await store.load();
         const persisted = upsertNote(latest, nextNote);
         personalNotes = persisted.notes;
         render();
@@ -113,11 +104,11 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
       }
     },
     async remove(id) {
+      let latestNotes = personalNotes;
       personalNotes = personalNotes.filter((note) => note.id !== id);
       render();
-      let latestNotes = personalNotes;
       try {
-        latestNotes = await loadLatestNotes(store, personalNotes);
+        latestNotes = await store.load();
         personalNotes = latestNotes.filter((note) => note.id !== id);
         render();
         await store.save(personalNotes);
