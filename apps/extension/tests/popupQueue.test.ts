@@ -78,6 +78,9 @@ describe("createPopupQueue", () => {
       "done",
       "failed",
     ]);
+    expect(Array.from(document.querySelectorAll<HTMLElement>(".queue-job")).map((item) =>
+      Array.from(item.querySelectorAll("button")).map((button) => button.textContent),
+    )).toEqual([["Remove"], [], ["Open", "Remove"], ["Retry", "Remove"]]);
 
     document.querySelectorAll<HTMLButtonElement>(".queue-job")[2]?.querySelector("button")?.click();
     await Promise.resolve();
