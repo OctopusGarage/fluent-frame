@@ -7,6 +7,9 @@ import {
 import { registerQueueContextMenus } from "../src/backgroundQueueContextMenus.js";
 import { createRequestId } from "../src/requestId.js";
 import { normalizeExtensionError, normalizeNativeResponse } from "../src/nativeHostClient.js";
+import { createVideoLearningSession } from "../src/generationSession.js";
+import { createRuntimeLearningGenerationClient } from "../src/learningGenerationClient.js";
+import type { CoachUi } from "../src/ui.js";
 
 type RuntimeMessageCallback = (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean;
 type NativeResponseFactory = (request: unknown) => unknown;
@@ -754,6 +757,70 @@ describe("background helpers", () => {
     contentPort.emitMessage({ type: "processCurrentVideoStream", videoId: "dQw4w9WgXcQ" });
     contentPort.emitDisconnect();
 
+    expect(nativePort.disconnect).toHaveBeenCalledOnce();
+  });
+
+  it.each(["success", "fallback", "error"] as const)("closes both streaming ports after session %s", (outcome) => {
+    let contentConnectListener: ((port: MockPort) => void) | undefined;
+    const nativePort = createMockPort("native");
+    const contentPort = createMockPort("fluent-frame-process-video");
+    const clientPort = createMockPort("fluent-frame-process-video");
+    clientPort.postMessage.mockImplementation((message) => contentPort.emitMessage(message));
+    contentPort.postMessage.mockImplementation((message) => clientPort.emitMessage(message));
+    clientPort.disconnect.mockImplementation(() => {
+      clientPort.emitDisconnect();
+      contentPort.emitDisconnect();
+    });
+    nativePort.disconnect.mockImplementation(() => nativePort.emitDisconnect());
+    registerBackgroundListener({
+      lastError: undefined,
+      sendNativeMessage: vi.fn(),
+      connectNative: () => nativePort,
+      onMessage: { addListener: vi.fn() },
+      onConnect: { addListener: (callback) => { contentConnectListener = callback; } },
+    });
+    const ui = {
+      clearResult: vi.fn(),
+      setProgress: vi.fn(),
+      setResult: vi.fn(),
+      setError: vi.fn(),
+    } as unknown as CoachUi;
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: createRuntimeLearningGenerationClient({
+        lastError: undefined,
+        sendMessage: vi.fn(),
+        connect() {
+          contentConnectListener?.(contentPort);
+          return clientPort;
+        },
+      }),
+      ui,
+      currentVideoId: () => "dQw4w9WgXcQ",
+      reconcilePlayerUi: vi.fn(),
+    });
+    session.start("dQw4w9WgXcQ");
+    const request = nativePort.postMessage.mock.calls[0]?.[0] as { id: string };
+    nativePort.emitMessage(outcome === "error" ? {
+      id: request.id, ok: false, type: "error", code: "PROCESSING_ERROR", message: "Download timed out",
+    } : {
+      id: request.id, ok: true, type: "result",
+      ...(outcome === "fallback" ? { mode: "sourceFallback", fallbackReason: "Agent timed out" } : {}),
+      result: {
+        videoId: "dQw4w9WgXcQ", sourceLanguage: "en", workflowVersion: "test",
+        generatedAt: "2026-07-20T00:00:00.000Z",
+        subtitles: [{ id: 1, startMs: 0, endMs: 1000, english: "Hello", chinese: "你好", phraseIds: [] }],
+        phrases: [],
+      },
+    });
+
+    expect(clientPort.disconnect).toHaveBeenCalledOnce();
+    expect(nativePort.disconnect).toHaveBeenCalledOnce();
+    if (outcome === "error") expect(ui.setError).toHaveBeenCalledWith("Download timed out");
+    else expect(ui.setError).not.toHaveBeenCalled();
+    expect(ui.setError).not.toHaveBeenCalledWith("Local helper disconnected before generation finished.");
+    session.cancel();
     expect(nativePort.disconnect).toHaveBeenCalledOnce();
   });
 

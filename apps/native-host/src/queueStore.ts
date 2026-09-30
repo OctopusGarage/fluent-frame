@@ -131,12 +131,18 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
   }
 
   async function readState(): Promise<QueueState> {
+    let content: string;
     try {
-      return normalizeState(JSON.parse(await readFile(queueFile, "utf8")) as unknown);
+      content = await readFile(queueFile, "utf8");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return emptyQueue();
       }
+      throw error;
+    }
+    try {
+      return normalizeState(JSON.parse(content) as unknown);
+    } catch {
       await mkdir(dirname(queueFile), { recursive: true });
       try {
         await rename(queueFile, `${queueFile}.corrupt`);

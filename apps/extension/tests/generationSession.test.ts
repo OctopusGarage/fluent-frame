@@ -1,6 +1,7 @@
 import type { LearningSubtitleResult } from "@fluent-frame/shared";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createVideoLearningSession } from "../src/generationSession.js";
+import type { LearningGenerationHandlers } from "../src/learningGenerationClient.js";
 import type { CoachUi } from "../src/ui.js";
 
 const result: LearningSubtitleResult = {
@@ -29,6 +30,101 @@ function createUi(): CoachUi {
 }
 
 describe("VideoLearningSession", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps generation started on the new video before the navigation poll", () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const ui = createUi();
+    let currentVideoId = "o3RPPjzciqo";
+    const requests: Array<{ handlers: LearningGenerationHandlers; disconnect: ReturnType<typeof vi.fn> }> = [];
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: {
+        start(_videoId, handlers) {
+          const request = { handlers, disconnect: vi.fn() };
+          requests.push(request);
+          return request;
+        },
+      },
+      ui,
+      currentVideoId: () => currentVideoId,
+      reconcilePlayerUi: vi.fn(),
+    });
+
+    session.start(currentVideoId);
+    currentVideoId = result.videoId;
+    session.start(currentVideoId);
+    session.handleNavigation(currentVideoId);
+
+    expect(requests[0]?.disconnect).toHaveBeenCalledOnce();
+    expect(requests[1]?.disconnect).not.toHaveBeenCalled();
+    expect(ui.clearResult).not.toHaveBeenLastCalledWith("Ready");
+    requests[1]?.handlers.onResult(result);
+    expect(ui.setResult).toHaveBeenCalledWith(result, expect.stringContaining("Learning subtitles ready"));
+    session.cancel();
+  });
+
+  it.each(["success", "fallback", "error", "disconnect"] as const)("releases the request and progress timer after %s", (outcome) => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const ui = createUi();
+    let handlers: LearningGenerationHandlers | undefined;
+    const disconnect = vi.fn(() => handlers?.onDisconnect());
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: {
+        start(_videoId, nextHandlers) {
+          handlers = nextHandlers;
+          return { disconnect };
+        },
+      },
+      ui,
+      currentVideoId: () => result.videoId,
+      reconcilePlayerUi: vi.fn(),
+    });
+
+    session.start(result.videoId);
+    if (outcome === "error") handlers?.onError("Generation timed out");
+    else if (outcome === "disconnect") handlers?.onDisconnect();
+    else handlers?.onResult(result, outcome === "fallback" ? { mode: "partialFallback" } : undefined);
+
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    if (outcome === "error") expect(ui.setError).toHaveBeenLastCalledWith("Generation timed out");
+    else if (outcome === "disconnect") expect(ui.setError).toHaveBeenCalledOnce();
+    else expect(ui.setError).not.toHaveBeenCalled();
+    session.cancel();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it("releases a request that finishes synchronously before start returns", () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const ui = createUi();
+    const disconnect = vi.fn();
+    const session = createVideoLearningSession({
+      doc: document,
+      win: window,
+      generationClient: {
+        start(_videoId, handlers) {
+          handlers.onResult(result);
+          return { disconnect };
+        },
+      },
+      ui,
+      currentVideoId: () => result.videoId,
+      reconcilePlayerUi: vi.fn(),
+    });
+
+    session.start(result.videoId);
+
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(ui.setResult).toHaveBeenCalledWith(result, expect.stringContaining("Learning subtitles ready"));
+  });
+
   it("does not start duplicate generation for the same active video", () => {
     const ui = createUi();
     const start = vi.fn(() => ({ disconnect: vi.fn() }));

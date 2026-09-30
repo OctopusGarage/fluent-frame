@@ -100,6 +100,46 @@ describe("createPersonalNotesController", () => {
     expect(saved).toEqual([[existingNote]]);
   });
 
+  it("does not overwrite persisted notes when the refresh before adding fails", async () => {
+    let persisted = [existingNote];
+    const save = vi.fn(async (notes: PersonalNote[]) => { persisted = notes; });
+    const { controller, setError, setStatus } = createController({
+      load: async () => { throw new Error("Native read failed"); },
+      save,
+    });
+
+    await controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+
+    expect(save).not.toHaveBeenCalled();
+    expect(persisted).toEqual([existingNote]);
+    expect(setError).toHaveBeenCalledWith("Note not saved: Native read failed");
+    expect(setStatus).not.toHaveBeenCalledWith("Added to personal notes");
+  });
+
+  it("does not overwrite persisted notes when the refresh before removing fails", async () => {
+    let persisted = [noteToRemove];
+    let loadCount = 0;
+    const save = vi.fn(async (notes: PersonalNote[]) => { persisted = notes; });
+    const { controller, setError, setStatus } = createController({
+      load: async () => {
+        if (++loadCount === 1) return persisted;
+        throw new Error("Native read failed");
+      },
+      save,
+    });
+    controller.load();
+    await vi.waitFor(() => expect(controller.notes()).toEqual([noteToRemove]));
+    persisted = [noteToRemove, existingNote];
+
+    await controller.remove(noteToRemove.id);
+
+    expect(save).not.toHaveBeenCalled();
+    expect(persisted).toEqual([noteToRemove, existingNote]);
+    expect(controller.notes()).toEqual([noteToRemove]);
+    expect(setError).toHaveBeenCalledWith("Note not removed: Native read failed");
+    expect(setStatus).not.toHaveBeenCalledWith("Removed from personal notes");
+  });
+
   it("surfaces save failures when removing a note", async () => {
     const { controller, setError } = createController({
       load: vi.fn().mockResolvedValue([noteToRemove]),
