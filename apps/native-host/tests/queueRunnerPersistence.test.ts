@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createLogger } from "../src/logger.js";
+import { createQueueCoordinator } from "../src/queueCoordinator.js";
 import { createQueueRunner } from "../src/queueRunner.js";
 import { createQueueStore } from "../src/queueStore.js";
 
@@ -17,7 +18,66 @@ async function withQueue(fn: (dir: string) => Promise<void>): Promise<void> {
 }
 
 describe("QueueRunner persistence", () => {
-  it.each([false, true])("continues after removal during processing (processing fails: %s)", async (fails) => {
+  it("keeps an in-flight job claimed when removal and another worker are requested", async () => {
+    await withQueue(async (dir) => {
+      const queueFile = join(dir, "jobs.json");
+      const store = createQueueStore(queueFile);
+      const first = (await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" })).job;
+      const second = (await store.enqueue({ videoId: "o3RPPjzciqo", captionLanguage: "en" })).job;
+      let signalStarted!: () => void;
+      const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+      let releaseFirst!: () => void;
+      const firstCanFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+      let active = 0;
+      let peakActive = 0;
+      const processed: string[] = [];
+      const processJob = async (job: { id: string }) => {
+        active += 1;
+        peakActive = Math.max(peakActive, active);
+        processed.push(job.id);
+        if (job.id === first.id && processed.filter((id) => id === first.id).length === 1) {
+          signalStarted();
+          await firstCanFinish;
+        }
+        active -= 1;
+      };
+      const firstRun = createQueueRunner({ store, processJob }).start();
+      await started;
+      try {
+        const removal = await createQueueStore(queueFile).remove(first.id).then(
+          () => "removed",
+          (error: unknown) => error,
+        );
+        const duplicate = await store.enqueue({ videoId: first.videoId, captionLanguage: "en" });
+        const retry = await store.retry(first.id);
+        const workerRuns: Promise<void>[] = [];
+        const coordinator = createQueueCoordinator({
+          store,
+          cacheReady: async () => false,
+          resolveTitle: async () => undefined,
+          startQueue: () => { workerRuns.push(createQueueRunner({ store: createQueueStore(queueFile), processJob }).start()); },
+          log: async () => {},
+        });
+        await coordinator.getQueue();
+        await Promise.all(workerRuns);
+        await createQueueRunner({ store: createQueueStore(queueFile), processJob }).start();
+
+        expect(peakActive).toBe(1);
+        expect(removal).toMatchObject({ message: "Cannot remove a running queue job" });
+        expect(duplicate.message).toBe("Already generating");
+        expect(retry.message).toBe("Already generating");
+        expect((await store.getQueue()).runningJobId).toBe(first.id);
+        expect(processed).toEqual([first.id]);
+      } finally {
+        releaseFirst();
+        await firstRun;
+      }
+      expect(processed).toEqual([first.id, second.id]);
+      expect((await store.getQueue()).jobs.map((job) => job.status)).toEqual(["done", "done"]);
+    });
+  });
+
+  it.each([false, true])("rejects removal during processing and continues (processing fails: %s)", async (fails) => {
     await withQueue(async (dir) => {
       const queueFile = join(dir, "jobs.json");
       const store = createQueueStore(queueFile);
@@ -30,8 +90,8 @@ describe("QueueRunner persistence", () => {
         processJob: async (job) => {
           processed.push(job.id);
           if (job.id === first.job.id) {
-            await createQueueStore(queueFile).remove(job.id);
-            if (fails) throw new Error("Generation failed after removal");
+            await expect(createQueueStore(queueFile).remove(job.id)).rejects.toThrow("Cannot remove a running queue job");
+            if (fails) throw new Error("Generation failed after removal was rejected");
           }
         },
       });
@@ -40,13 +100,15 @@ describe("QueueRunner persistence", () => {
 
       expect(processed).toEqual([first.job.id, second.job.id]);
       const saved = await createQueueStore(queueFile).getQueue();
-      expect(saved.jobs).toHaveLength(1);
-      expect(saved.jobs[0]).toMatchObject({ id: second.job.id, status: "done" });
+      expect(saved.jobs).toHaveLength(2);
+      expect(saved.jobs[0]).toMatchObject({ id: first.job.id, status: fails ? "failed" : "done" });
+      expect(saved.jobs[1]).toMatchObject({ id: second.job.id, status: "done" });
       expect(saved.runningJobId).toBeUndefined();
       expect(runner.isRunning()).toBe(false);
       const events = (await readFile(join(dir, "runner.log"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-      expect(events).toContainEqual(expect.objectContaining({ event: "job.removedDuringProcessing", jobId: first.job.id }));
-      expect(events.filter((event) => event.event === "job.completed").map((event) => event.jobId)).toEqual([second.job.id]);
+      expect(events.filter((event) => event.event === "job.completed").map((event) => event.jobId)).toEqual(
+        fails ? [second.job.id] : [first.job.id, second.job.id],
+      );
     });
   });
 

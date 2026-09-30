@@ -122,7 +122,6 @@ export function createPopupQueue(deps: PopupQueueDeps) {
         const title = deps.doc.createElement("div");
         const detail = deps.doc.createElement("div");
         const actions = deps.doc.createElement("div");
-        const remove = deps.doc.createElement("button");
         item.className = "queue-job";
         item.dataset.status = job.status;
         text.className = "queue-job-text";
@@ -150,12 +149,15 @@ export function createPopupQueue(deps: PopupQueueDeps) {
           });
           actions.append(open);
         }
-        remove.type = "button";
-        remove.textContent = "Remove";
-        remove.addEventListener("click", () => {
-          void sendAction({ type: "removeQueueJob", jobId: job.id });
-        });
-        actions.append(remove);
+        if (job.status !== "running") {
+          const remove = deps.doc.createElement("button");
+          remove.type = "button";
+          remove.textContent = "Remove";
+          remove.addEventListener("click", () => {
+            void sendAction({ type: "removeQueueJob", jobId: job.id });
+          });
+          actions.append(remove);
+        }
         item.append(text, actions);
         return item;
       }),

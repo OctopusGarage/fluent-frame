@@ -215,6 +215,9 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
     async remove(jobIdToRemove) {
       return withLock(async () => {
         const state = await readState();
+        if (state.jobs.some((job) => job.id === jobIdToRemove && job.status === "running")) {
+          throw new Error("Cannot remove a running queue job");
+        }
         return writeJobs(state.jobs.filter((job) => job.id !== jobIdToRemove));
       });
     },
