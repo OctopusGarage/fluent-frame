@@ -50,6 +50,13 @@ function upsertNote(notes: PersonalNote[], nextNote: PersonalNote): { notes: Per
 export function createPersonalNotesController(deps: PersonalNotesControllerDeps): PersonalNotesController {
   const store = deps.store ?? defaultNotesStore();
   let personalNotes: PersonalNote[] = [];
+  let pendingMutation: Promise<void> = Promise.resolve();
+
+  function serializeMutation(operation: () => Promise<void>): Promise<void> {
+    const current = pendingMutation.then(operation);
+    pendingMutation = current.catch(() => {});
+    return current;
+  }
 
   function render(): void {
     deps.render(personalNotes);
@@ -73,52 +80,56 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         render();
       });
     },
-    async add({ videoId, cue, phrase }) {
-      const nextNote: PersonalNote = {
-        id: noteId(videoId, cue, phrase),
-        videoId,
-        cueId: cue.id,
-        startMs: cue.startMs,
-        sentenceEnglish: normalizeText(cue.english),
-        sentenceChinese: normalizeText(cue.chinese || phrase?.meaningZh || "Translation pending"),
-        phrase: phrase?.phrase ?? normalizeText(cue.english),
-        meaningZh: phrase?.meaningZh ?? normalizeText(cue.chinese || "Translation pending"),
-        explanationEn: phrase?.explanationEn ?? "Subtitle sentence",
-        ...(phrase?.usageNotes ? { usageNotes: phrase.usageNotes } : {}),
-        savedAt: new Date().toISOString(),
-      };
-      const optimistic = upsertNote(personalNotes, nextNote);
-      personalNotes = optimistic.notes;
-      render();
-      deps.setStatus(optimistic.existed ? "Note already saved" : "Adding note...");
-      try {
-        const latest = await store.load();
-        const persisted = upsertNote(latest, nextNote);
-        personalNotes = persisted.notes;
+    add({ videoId, cue, phrase }) {
+      return serializeMutation(async () => {
+        const nextNote: PersonalNote = {
+          id: noteId(videoId, cue, phrase),
+          videoId,
+          cueId: cue.id,
+          startMs: cue.startMs,
+          sentenceEnglish: normalizeText(cue.english),
+          sentenceChinese: normalizeText(cue.chinese || phrase?.meaningZh || "Translation pending"),
+          phrase: phrase?.phrase ?? normalizeText(cue.english),
+          meaningZh: phrase?.meaningZh ?? normalizeText(cue.chinese || "Translation pending"),
+          explanationEn: phrase?.explanationEn ?? "Subtitle sentence",
+          ...(phrase?.usageNotes ? { usageNotes: phrase.usageNotes } : {}),
+          savedAt: new Date().toISOString(),
+        };
+        const optimistic = upsertNote(personalNotes, nextNote);
+        personalNotes = optimistic.notes;
         render();
-        await store.save(personalNotes);
-        deps.setStatus(persisted.existed ? "Note already saved" : "Added to personal notes");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Local helper failed";
-        deps.setError(`Note not saved: ${message}`);
-      }
+        deps.setStatus(optimistic.existed ? "Note already saved" : "Adding note...");
+        try {
+          const latest = await store.load();
+          const persisted = upsertNote(latest, nextNote);
+          personalNotes = persisted.notes;
+          render();
+          await store.save(personalNotes);
+          deps.setStatus(persisted.existed ? "Note already saved" : "Added to personal notes");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Local helper failed";
+          deps.setError(`Note not saved: ${message}`);
+        }
+      });
     },
-    async remove(id) {
-      let latestNotes = personalNotes;
-      personalNotes = personalNotes.filter((note) => note.id !== id);
-      render();
-      try {
-        latestNotes = await store.load();
-        personalNotes = latestNotes.filter((note) => note.id !== id);
+    remove(id) {
+      return serializeMutation(async () => {
+        let latestNotes = personalNotes;
+        personalNotes = personalNotes.filter((note) => note.id !== id);
         render();
-        await store.save(personalNotes);
-        deps.setStatus("Removed from personal notes");
-      } catch (error) {
-        personalNotes = latestNotes;
-        render();
-        const message = error instanceof Error ? error.message : "Local helper failed";
-        deps.setError(`Note not removed: ${message}`);
-      }
+        try {
+          latestNotes = await store.load();
+          personalNotes = latestNotes.filter((note) => note.id !== id);
+          render();
+          await store.save(personalNotes);
+          deps.setStatus("Removed from personal notes");
+        } catch (error) {
+          personalNotes = latestNotes;
+          render();
+          const message = error instanceof Error ? error.message : "Local helper failed";
+          deps.setError(`Note not removed: ${message}`);
+        }
+      });
     },
   };
 }

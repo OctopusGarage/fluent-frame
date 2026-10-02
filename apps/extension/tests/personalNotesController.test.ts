@@ -63,6 +63,25 @@ function createController(input: {
 }
 
 describe("createPersonalNotesController", () => {
+  it("preserves both notes when two saves overlap", async () => {
+    let persisted: PersonalNote[] = [];
+    const { controller } = createController({
+      load: async () => [...persisted],
+      save: async (notes) => { persisted = [...notes]; },
+    });
+    const secondCue = { ...cue, id: 2, startMs: 3000, endMs: 4000 };
+
+    await Promise.all([
+      controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase }),
+      controller.add({ videoId: "dQw4w9WgXcQ", cue: secondCue }),
+    ]);
+
+    expect(persisted.map((note) => note.id)).toEqual([
+      "dQw4w9WgXcQ:2:subtitle",
+      "dQw4w9WgXcQ:1:p1",
+    ]);
+  });
+
   it("preserves notes saved by another tab when adding a note from stale local state", async () => {
     const saved: PersonalNote[][] = [];
     const { controller } = createController({
