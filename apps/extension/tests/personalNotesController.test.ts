@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PersonalNote, PhraseExplanation, SubtitleCue } from "@fluent-frame/shared";
 import { createPersonalNotesController } from "../src/personalNotesController.js";
 
@@ -63,6 +63,96 @@ function createController(input: {
 }
 
 describe("createPersonalNotesController", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("preserves both notes when separate tabs add during one pending save", async () => {
+    let persisted: PersonalNote[] = [];
+    let releaseFirstSave: (() => void) | undefined;
+    let firstSaveStarted: (() => void) | undefined;
+    let markSecondRequestQueued: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { firstSaveStarted = resolve; });
+    const release = new Promise<void>((resolve) => { releaseFirstSave = resolve; });
+    const secondRequestQueued = new Promise<void>((resolve) => { markSecondRequestQueued = resolve; });
+    let saves = 0;
+    let requests = 0;
+    let lockTail = Promise.resolve();
+    const request = vi.fn((_name: string, _options: unknown, callback: () => Promise<void>) => {
+      const current = lockTail.then(callback);
+      lockTail = current.catch(() => {});
+      if (++requests === 2) markSecondRequestQueued?.();
+      return current;
+    });
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { locks: { request } }));
+    const store = {
+      load: async () => [...persisted],
+      save: async (notes: PersonalNote[]) => {
+        if (++saves === 1) {
+          firstSaveStarted?.();
+          await release;
+        }
+        persisted = [...notes];
+      },
+    };
+    const first = createController(store).controller;
+    const second = createController(store).controller;
+
+    const firstAdd = first.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+    await started;
+    const secondAdd = second.add({ videoId: "dQw4w9WgXcQ", cue: { ...cue, id: 2 } });
+    await secondRequestQueued;
+    releaseFirstSave?.();
+    await Promise.all([firstAdd, secondAdd]);
+
+    expect(persisted.map((note) => note.id)).toEqual([
+      "dQw4w9WgXcQ:2:subtitle",
+      "dQw4w9WgXcQ:1:p1",
+    ]);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases the cross-tab lock when a save fails", async () => {
+    let lockTail = Promise.resolve();
+    const request = vi.fn((_name: string, _options: unknown, callback: () => Promise<void>) => {
+      const current = lockTail.then(callback);
+      lockTail = current.catch(() => {});
+      return current;
+    });
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { locks: { request } }));
+    let persisted: PersonalNote[] = [];
+    let saves = 0;
+    const store = {
+      load: async () => [...persisted],
+      save: async (notes: PersonalNote[]) => {
+        if (++saves === 1) throw new Error("Native save failed");
+        persisted = [...notes];
+      },
+    };
+    const first = createController(store);
+    const second = createController(store);
+
+    await first.controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+    await second.controller.add({ videoId: "dQw4w9WgXcQ", cue: { ...cue, id: 2 } });
+
+    expect(first.setError).toHaveBeenCalledWith("Note not saved: Native save failed");
+    expect(persisted.map((note) => note.id)).toEqual(["dQw4w9WgXcQ:2:subtitle"]);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a cancelled lock request without touching the store", async () => {
+    const request = vi.fn().mockRejectedValue(new DOMException("Cancelled", "AbortError"));
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { locks: { request } }));
+    const load = vi.fn(async () => []);
+    const save = vi.fn(async () => {});
+    const { controller, setError } = createController({ load, save });
+
+    await controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+
+    expect(setError).toHaveBeenCalledWith("Note not saved: Local helper failed");
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(load).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("preserves both notes when two saves overlap", async () => {
     let persisted: PersonalNote[] = [];
     const { controller } = createController({

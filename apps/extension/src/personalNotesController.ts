@@ -47,6 +47,13 @@ function upsertNote(notes: PersonalNote[], nextNote: PersonalNote): { notes: Per
   return { existed: false, notes: [nextNote, ...notes] };
 }
 
+function withNotesLock(operation: () => Promise<void>): Promise<void> {
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  return locks?.request
+    ? locks.request<void>("fluent-frame-personal-notes", { mode: "exclusive" }, operation)
+    : operation();
+}
+
 export function createPersonalNotesController(deps: PersonalNotesControllerDeps): PersonalNotesController {
   const store = deps.store ?? defaultNotesStore();
   let personalNotes: PersonalNote[] = [];
@@ -100,12 +107,14 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         render();
         deps.setStatus(optimistic.existed ? "Note already saved" : "Adding note...");
         try {
-          const latest = await store.load();
-          const persisted = upsertNote(latest, nextNote);
-          personalNotes = persisted.notes;
-          render();
-          await store.save(personalNotes);
-          deps.setStatus(persisted.existed ? "Note already saved" : "Added to personal notes");
+          await withNotesLock(async () => {
+            const latest = await store.load();
+            const persisted = upsertNote(latest, nextNote);
+            personalNotes = persisted.notes;
+            render();
+            await store.save(personalNotes);
+            deps.setStatus(persisted.existed ? "Note already saved" : "Added to personal notes");
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Local helper failed";
           deps.setError(`Note not saved: ${message}`);
@@ -118,11 +127,13 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         personalNotes = personalNotes.filter((note) => note.id !== id);
         render();
         try {
-          latestNotes = await store.load();
-          personalNotes = latestNotes.filter((note) => note.id !== id);
-          render();
-          await store.save(personalNotes);
-          deps.setStatus("Removed from personal notes");
+          await withNotesLock(async () => {
+            latestNotes = await store.load();
+            personalNotes = latestNotes.filter((note) => note.id !== id);
+            render();
+            await store.save(personalNotes);
+            deps.setStatus("Removed from personal notes");
+          });
         } catch (error) {
           personalNotes = latestNotes;
           render();
