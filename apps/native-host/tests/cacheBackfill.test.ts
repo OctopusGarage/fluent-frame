@@ -130,6 +130,26 @@ describe("backfillRemoteCache", () => {
     expect(reads).toBe(1);
   });
 
+  it("reaches a valid result after more invalid local entries than the remote attempt limit", async () => {
+    for (let index = 0; index < 21; index += 1) {
+      await mkdir(join(dir, `aInvalid${String(index).padStart(2, "0")}`, "en", WORKFLOW_VERSION), { recursive: true });
+    }
+    await writeCachedResult(dir, result("zValidVideo"));
+    const uploaded: string[] = [];
+
+    const summary = await backfillRemoteCache({
+      cacheDir: dir,
+      maxUploads: 1,
+      remoteCache: {
+        readResult: async () => { throw new Error("unexpected read"); },
+        writeResult: async (value) => { uploaded.push(value.videoId); },
+      },
+    });
+
+    expect(summary).toMatchObject({ scanned: 22, skippedInvalid: 21, uploaded: 1 });
+    expect(uploaded).toEqual(["zValidVideo"]);
+  });
+
   it("uploads local cache results and skips stale cache directories", async () => {
     const uploaded: string[] = [];
     const staleResult = result("staleVideo01");

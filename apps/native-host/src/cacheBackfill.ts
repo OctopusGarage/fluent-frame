@@ -97,6 +97,7 @@ export async function backfillRemoteCache(input: CacheBackfillInput): Promise<Ca
     skippedInvalid: 0,
     failed: 0,
   };
+  let remoteAttempts = 0;
 
   for (const videoId of await readDirNames(input.cacheDir)) {
     for (const sourceLanguage of await readDirNames(join(input.cacheDir, videoId))) {
@@ -111,10 +112,6 @@ export async function backfillRemoteCache(input: CacheBackfillInput): Promise<Ca
         if (state.synced.has(key)) {
           continue;
         }
-        if (summary.scanned >= maxUploads) {
-          return summary;
-        }
-        summary.scanned += 1;
         const result = await readCachedBackfillResult(
           join(input.cacheDir, videoId, sourceLanguage, workflowVersion, "result.json"),
           videoId,
@@ -122,9 +119,15 @@ export async function backfillRemoteCache(input: CacheBackfillInput): Promise<Ca
           workflowVersion,
         );
         if (!result) {
+          summary.scanned += 1;
           summary.skippedInvalid += 1;
           continue;
         }
+        if (remoteAttempts >= maxUploads) {
+          return summary;
+        }
+        remoteAttempts += 1;
+        summary.scanned += 1;
         try {
           if (state.legacySynced.has(key)) {
             const remoteResult = await input.remoteCache.readResult(videoId, sourceLanguage, workflowVersion);
