@@ -24,8 +24,12 @@ export type CacheBackfillInput = {
 const DEFAULT_MAX_UPLOADS = 20;
 
 type CacheBackfillSyncState = {
+  version?: number;
   synced: string[];
+  legacySynced?: string[];
 };
+
+type LoadedSyncState = { synced: Set<string>; legacySynced: Set<string> };
 
 async function readDirNames(path: string): Promise<string[]> {
   try {
@@ -54,28 +58,37 @@ function syncStatePath(input: CacheBackfillInput): string {
   return input.syncStateFile ?? join(input.cacheDir, ".remote-cache-backfill.json");
 }
 
-async function readSyncState(path: string): Promise<Set<string>> {
+async function readSyncState(path: string): Promise<LoadedSyncState> {
   try {
     const parsed = JSON.parse(await readFile(path, "utf8")) as Partial<CacheBackfillSyncState>;
-    return new Set(Array.isArray(parsed.synced) ? parsed.synced.filter((value) => typeof value === "string") : []);
+    const keys = (value: unknown) => new Set(Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : []);
+    return parsed.version === 2
+      ? { synced: keys(parsed.synced), legacySynced: keys(parsed.legacySynced) }
+      : { synced: new Set(), legacySynced: keys(parsed.synced) };
   } catch {
-    return new Set();
+    return { synced: new Set(), legacySynced: new Set() };
   }
 }
 
-async function writeSyncState(path: string, synced: Set<string>): Promise<void> {
-  await writeJsonFileAtomically(path, { synced: [...synced].sort() });
+async function writeSyncState(path: string, state: LoadedSyncState): Promise<void> {
+  await writeJsonFileAtomically(path, {
+    version: 2,
+    synced: [...state.synced].sort(),
+    legacySynced: [...state.legacySynced].sort(),
+  });
 }
 
 export async function backfillRemoteCache(input: CacheBackfillInput): Promise<CacheBackfillSummary> {
   const maxUploads = Math.max(0, input.maxUploads ?? DEFAULT_MAX_UPLOADS);
   const statePath = syncStatePath(input);
-  const synced = await readSyncState(statePath);
+  const state = await readSyncState(statePath);
   for (const result of input.syncedResults ?? []) {
-    synced.add(cacheKey(result.videoId, result.sourceLanguage, result.workflowVersion));
+    const key = cacheKey(result.videoId, result.sourceLanguage, result.workflowVersion);
+    state.synced.add(key);
+    state.legacySynced.delete(key);
   }
   if (input.syncedResults?.length) {
-    await writeSyncState(statePath, synced);
+    await writeSyncState(statePath, state);
   }
   const summary: CacheBackfillSummary = {
     scanned: 0,
@@ -95,10 +108,10 @@ export async function backfillRemoteCache(input: CacheBackfillInput): Promise<Ca
           continue;
         }
         const key = cacheKey(videoId, sourceLanguage, workflowVersion);
-        if (synced.has(key)) {
+        if (state.synced.has(key)) {
           continue;
         }
-        if (summary.uploaded >= maxUploads) {
+        if (summary.scanned >= maxUploads) {
           return summary;
         }
         summary.scanned += 1;
@@ -113,12 +126,23 @@ export async function backfillRemoteCache(input: CacheBackfillInput): Promise<Ca
           continue;
         }
         try {
+          if (state.legacySynced.has(key)) {
+            const remoteResult = await input.remoteCache.readResult(videoId, sourceLanguage, workflowVersion);
+            if (remoteResult) {
+              state.legacySynced.delete(key);
+              state.synced.add(key);
+              await writeSyncState(statePath, state);
+              summary.skippedExisting += 1;
+              continue;
+            }
+          }
           if (await input.remoteCache.writeResult(result) === false) {
             summary.failed += 1;
             continue;
           }
-          synced.add(key);
-          await writeSyncState(statePath, synced);
+          state.legacySynced.delete(key);
+          state.synced.add(key);
+          await writeSyncState(statePath, state);
           summary.uploaded += 1;
         } catch {
           summary.failed += 1;

@@ -48,6 +48,88 @@ function result(videoId: string): LearningSubtitleResult {
 }
 
 describe("backfillRemoteCache", () => {
+  it("retries a legacy synced mark when the remote result is missing", async () => {
+    const cached = result("legacyFalse1");
+    await writeCachedResult(dir, cached);
+    const statePath = join(dir, ".remote-cache-backfill.json");
+    await writeJsonFileAtomically(statePath, { synced: [`${cached.videoId}/en/${WORKFLOW_VERSION}`] });
+    const requests: string[] = [];
+    const remoteCache = createGithubRemoteCache({
+      config: {
+        enabled: true, provider: "github", owner: "octo", repo: "cache", branch: "main",
+        basePath: "data/youtube", writeEnabled: true, token: "token",
+      },
+      fetch: async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request.method);
+        return request.method === "GET" ? new Response("", { status: 404 }) : new Response("", { status: 200 });
+      },
+    });
+
+    expect((await backfillRemoteCache({ cacheDir: dir, remoteCache })).uploaded).toBe(1);
+    expect(requests).toEqual(["GET", "GET", "PUT"]);
+    await backfillRemoteCache({ cacheDir: dir, remoteCache });
+    expect(requests).toEqual(["GET", "GET", "PUT"]);
+  });
+
+  it("verifies a legacy synced mark without uploading an existing remote result", async () => {
+    const cached = result("legacyTrue1");
+    await writeCachedResult(dir, cached);
+    await writeJsonFileAtomically(join(dir, ".remote-cache-backfill.json"), { synced: [`${cached.videoId}/en/${WORKFLOW_VERSION}`] });
+    let reads = 0;
+    let writes = 0;
+    const remoteCache = {
+      readResult: async () => { reads += 1; return cached; },
+      writeResult: async () => { writes += 1; },
+    };
+
+    expect((await backfillRemoteCache({ cacheDir: dir, remoteCache })).uploaded).toBe(0);
+    await backfillRemoteCache({ cacheDir: dir, remoteCache });
+    expect(reads).toBe(1);
+    expect(writes).toBe(0);
+  });
+
+  it("leaves a legacy mark pending after a transient remote read error", async () => {
+    const cached = result("legacyError1");
+    await writeCachedResult(dir, cached);
+    const statePath = join(dir, ".remote-cache-backfill.json");
+    await writeJsonFileAtomically(statePath, { synced: [`${cached.videoId}/en/${WORKFLOW_VERSION}`] });
+    let reads = 0;
+    let writes = 0;
+    const remoteCache = {
+      readResult: async () => { reads += 1; if (reads === 1) throw new Error("GitHub 503"); return undefined; },
+      writeResult: async () => { writes += 1; },
+    };
+
+    expect((await backfillRemoteCache({ cacheDir: dir, remoteCache })).failed).toBe(1);
+    expect(writes).toBe(0);
+    expect(JSON.parse(await readFile(statePath, "utf8"))).toEqual({ synced: [`${cached.videoId}/en/${WORKFLOW_VERSION}`] });
+    expect((await backfillRemoteCache({ cacheDir: dir, remoteCache })).uploaded).toBe(1);
+    expect(reads).toBe(2);
+    expect(writes).toBe(1);
+  });
+
+  it("bounds legacy verification attempts even when remote reads fail", async () => {
+    const first = result("legacyError1");
+    const second = result("legacyError2");
+    await writeCachedResult(dir, first);
+    await writeCachedResult(dir, second);
+    await writeJsonFileAtomically(join(dir, ".remote-cache-backfill.json"), {
+      synced: [first, second].map((value) => `${value.videoId}/en/${WORKFLOW_VERSION}`),
+    });
+    let reads = 0;
+    const summary = await backfillRemoteCache({
+      cacheDir: dir,
+      maxUploads: 1,
+      remoteCache: {
+        readResult: async () => { reads += 1; throw new Error("GitHub 503"); },
+        writeResult: async () => { throw new Error("unexpected PUT"); },
+      },
+    });
+    expect(summary).toMatchObject({ scanned: 1, failed: 1, uploaded: 0 });
+    expect(reads).toBe(1);
+  });
+
   it("uploads local cache results and skips stale cache directories", async () => {
     const uploaded: string[] = [];
     const staleResult = result("staleVideo01");
@@ -173,7 +255,9 @@ describe("backfillRemoteCache", () => {
     expect(second.uploaded).toBe(1);
     expect(uploaded).toEqual([cachedResult.videoId]);
     expect(JSON.parse(await readFile(join(dir, ".remote-cache-backfill.json"), "utf8"))).toEqual({
+      version: 2,
       synced: [`${cachedResult.videoId}/en/${WORKFLOW_VERSION}`],
+      legacySynced: [],
     });
     const third = await backfillRemoteCache({ cacheDir: dir, remoteCache: enabledCache });
     expect(third.uploaded).toBe(0);
