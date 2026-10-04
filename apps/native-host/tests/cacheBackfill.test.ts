@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WORKFLOW_VERSION, type LearningSubtitleResult } from "@fluent-frame/shared";
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { backfillRemoteCache } from "../src/cacheBackfill.js";
 import { writeCachedResult } from "../src/cache.js";
 import { writeJsonFileAtomically } from "../src/jsonFile.js";
+import { createGithubRemoteCache } from "../src/remoteCache.js";
 
 let dir = "";
 
@@ -133,5 +134,49 @@ describe("backfillRemoteCache", () => {
 
     expect(summary).toMatchObject({ scanned: 0, uploaded: 0 });
     expect(writes).toBe(0);
+  });
+
+  it.each([
+    { name: "writes disabled", writeEnabled: false, token: "token" },
+    { name: "missing token", writeEnabled: true, token: undefined },
+  ])("keeps $name results eligible for a later upload", async ({ writeEnabled, token }) => {
+    const cachedResult = result("retryLater1");
+    await writeCachedResult(dir, cachedResult);
+    let requests = 0;
+    const remoteCache = createGithubRemoteCache({
+      config: {
+        enabled: true,
+        provider: "github",
+        owner: "octo",
+        repo: "cache",
+        branch: "main",
+        basePath: "data/youtube",
+        writeEnabled,
+        ...(token ? { token } : {}),
+      },
+      fetch: async () => {
+        requests += 1;
+        return new Response("", { status: 404 });
+      },
+    });
+
+    const first = await backfillRemoteCache({ cacheDir: dir, remoteCache });
+    expect(first.uploaded).toBe(0);
+    expect(requests).toBe(0);
+
+    const uploaded: string[] = [];
+    const enabledCache = {
+      readResult: async () => undefined,
+      writeResult: async (value: LearningSubtitleResult) => { uploaded.push(value.videoId); },
+    };
+    const second = await backfillRemoteCache({ cacheDir: dir, remoteCache: enabledCache });
+    expect(second.uploaded).toBe(1);
+    expect(uploaded).toEqual([cachedResult.videoId]);
+    expect(JSON.parse(await readFile(join(dir, ".remote-cache-backfill.json"), "utf8"))).toEqual({
+      synced: [`${cachedResult.videoId}/en/${WORKFLOW_VERSION}`],
+    });
+    const third = await backfillRemoteCache({ cacheDir: dir, remoteCache: enabledCache });
+    expect(third.uploaded).toBe(0);
+    expect(uploaded).toEqual([cachedResult.videoId]);
   });
 });

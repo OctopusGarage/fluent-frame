@@ -113,7 +113,10 @@ export async function backfillRemoteCache(input: CacheBackfillInput): Promise<Ca
           continue;
         }
         try {
-          await input.remoteCache.writeResult(result);
+          if (await input.remoteCache.writeResult(result) === false) {
+            summary.failed += 1;
+            continue;
+          }
           synced.add(key);
           await writeSyncState(statePath, synced);
           summary.uploaded += 1;
