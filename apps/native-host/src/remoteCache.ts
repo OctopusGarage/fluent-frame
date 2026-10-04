@@ -4,7 +4,7 @@ import type { RemoteCacheConfig } from "./config.js";
 
 export type RemoteCacheProvider = {
   readResult(videoId: string, captionLanguage: string, workflowVersion?: string): Promise<LearningSubtitleResult | undefined>;
-  writeResult(result: LearningSubtitleResult): Promise<void>;
+  writeResult(result: LearningSubtitleResult): Promise<void | false>;
 };
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -98,7 +98,7 @@ export function createGithubRemoteCache({ config, fetch: fetchImpl = fetch }: Gi
 
     async writeResult(result) {
       if (!config.writeEnabled || !config.token) {
-        return;
+        return false;
       }
       const path = githubRemoteCachePath(config.basePath, result.videoId, result.sourceLanguage, result.workflowVersion);
       const existing = await readContent(path);

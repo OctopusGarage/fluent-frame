@@ -185,8 +185,10 @@ export async function processVideo(
     await writeCachedResult(deps.cacheDir, result);
     await writeCachedVideoTitle(deps.cacheDir, videoId, captionLanguage, deps.title).catch(() => undefined);
     await clearCachedPartialResult(deps.cacheDir, videoId, captionLanguage).catch(() => undefined);
-    await deps.remoteCache?.writeResult(result).catch(() => undefined);
-    await deps.backfillRemoteCache?.(result).catch(() => undefined);
+    const remoteWrite = await deps.remoteCache?.writeResult(result).catch(() => false);
+    if (deps.remoteCache && remoteWrite !== false) {
+      await deps.backfillRemoteCache?.(result).catch(() => undefined);
+    }
   }
   const mode: ProcessVideoMode = successfulAgentOutput ? "generated" : bestAgentOutput ? "partialFallback" : "sourceFallback";
   if (agentFailure && mode !== "generated") {
