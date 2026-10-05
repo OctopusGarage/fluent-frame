@@ -366,7 +366,7 @@ describe("createCoachUi", () => {
       expect(document.getElementById("ff-status")?.textContent).toBe("Note not saved: Native save failed");
     });
     expect(document.getElementById("ff-root")?.dataset.error).toBe("true");
-    expect(document.getElementById("ff-notes-list")?.textContent).toContain("Nice pass.");
+    expect(document.getElementById("ff-notes-list")?.textContent).toBe("");
   });
 
   it("loads saved personal notes for later review", async () => {

@@ -58,6 +58,7 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
   const store = deps.store ?? defaultNotesStore();
   let personalNotes: PersonalNote[] = [];
   let pendingMutation: Promise<void> = Promise.resolve();
+  let mutationVersion = 0;
 
   function serializeMutation(operation: () => Promise<void>): Promise<void> {
     const current = pendingMutation.then(operation);
@@ -74,13 +75,19 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
       return personalNotes;
     },
     load() {
-      void store.load().then((notes) => {
-        if (personalNotes.length > 0) {
+      const startedAtVersion = mutationVersion;
+      void store.load().then(async (notes) => {
+        await pendingMutation;
+        if (startedAtVersion !== mutationVersion || personalNotes.length > 0) {
           return;
         }
         personalNotes = Array.isArray(notes) ? notes : [];
         render();
-      }).catch(() => {
+      }).catch(async () => {
+        await pendingMutation;
+        if (startedAtVersion !== mutationVersion) {
+          return;
+        }
         if (personalNotes.length === 0) {
           personalNotes = [];
         }
@@ -102,6 +109,7 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
           ...(phrase?.usageNotes ? { usageNotes: phrase.usageNotes } : {}),
           savedAt: new Date().toISOString(),
         };
+        let rollbackNotes = personalNotes;
         const optimistic = upsertNote(personalNotes, nextNote);
         personalNotes = optimistic.notes;
         render();
@@ -109,6 +117,8 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         try {
           await withNotesLock(async () => {
             const latest = await store.load();
+            mutationVersion += 1;
+            rollbackNotes = latest;
             const persisted = upsertNote(latest, nextNote);
             personalNotes = persisted.notes;
             render();
@@ -116,6 +126,8 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
             deps.setStatus(persisted.existed ? "Note already saved" : "Added to personal notes");
           });
         } catch (error) {
+          personalNotes = rollbackNotes;
+          render();
           const message = error instanceof Error ? error.message : "Local helper failed";
           deps.setError(`Note not saved: ${message}`);
         }
@@ -129,6 +141,7 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         try {
           await withNotesLock(async () => {
             latestNotes = await store.load();
+            mutationVersion += 1;
             personalNotes = latestNotes.filter((note) => note.id !== id);
             render();
             await store.save(personalNotes);
