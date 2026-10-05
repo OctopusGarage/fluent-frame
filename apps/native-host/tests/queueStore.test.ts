@@ -72,6 +72,33 @@ describe("QueueStore", () => {
     });
   });
 
+  it("requeues a completed job when its cached result is no longer ready", async () => {
+    await withTempDir(async (dir) => {
+      const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });
+      const first = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en", cacheReady: true });
+
+      const second = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en", cacheReady: false });
+
+      expect(first.job.status).toBe("done");
+      expect(second.message).toBe("Queued");
+      expect(second.job.status).toBe("queued");
+      expect(second.job.finishedAt).toBeUndefined();
+      expect((await store.getQueue()).jobs).toEqual([second.job]);
+    });
+  });
+
+  it("keeps a completed job ready when a metadata update does not check the cache", async () => {
+    await withTempDir(async (dir) => {
+      const store = createQueueStore(join(dir, "jobs.json"));
+      await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en", cacheReady: true });
+
+      const updated = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en", title: "Video title" });
+
+      expect(updated.message).toBe("Already ready");
+      expect(updated.job).toMatchObject({ status: "done", title: "Video title" });
+    });
+  });
+
   it("claims queued jobs serially and recovers stale running jobs", async () => {
     await withTempDir(async (dir) => {
       let tick = 0;
