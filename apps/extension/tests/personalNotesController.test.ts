@@ -209,6 +209,27 @@ describe("createPersonalNotesController", () => {
     expect(saved).toEqual([[existingNote]]);
   });
 
+  it("does not restore a removed note when the initial load finishes late", async () => {
+    let persisted = [noteToRemove];
+    let resolveInitialLoad: ((notes: PersonalNote[]) => void) | undefined;
+    const initialLoad = new Promise<PersonalNote[]>((resolve) => { resolveInitialLoad = resolve; });
+    let loadCount = 0;
+    const { controller } = createController({
+      load: () => ++loadCount === 1 ? initialLoad : Promise.resolve([...persisted]),
+      save: async (notes) => { persisted = [...notes]; },
+    });
+
+    controller.load();
+    await controller.add({ videoId: noteToRemove.videoId, cue, phrase });
+    await controller.remove(noteToRemove.id);
+    expect(persisted).toEqual([]);
+
+    resolveInitialLoad?.([noteToRemove]);
+    await initialLoad;
+    await Promise.resolve();
+    expect(controller.notes()).toEqual([]);
+  });
+
   it("does not overwrite persisted notes when the refresh before adding fails", async () => {
     let persisted = [existingNote];
     const save = vi.fn(async (notes: PersonalNote[]) => { persisted = notes; });
@@ -223,6 +244,19 @@ describe("createPersonalNotesController", () => {
     expect(persisted).toEqual([existingNote]);
     expect(setError).toHaveBeenCalledWith("Note not saved: Native read failed");
     expect(setStatus).not.toHaveBeenCalledWith("Added to personal notes");
+    expect(controller.notes()).toEqual([]);
+  });
+
+  it("removes an optimistic note when saving it fails", async () => {
+    const { controller, setError } = createController({
+      load: async () => [existingNote],
+      save: async () => { throw new Error("Native save failed"); },
+    });
+
+    await controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+
+    expect(controller.notes()).toEqual([existingNote]);
+    expect(setError).toHaveBeenCalledWith("Note not saved: Native save failed");
   });
 
   it("does not overwrite persisted notes when the refresh before removing fails", async () => {
