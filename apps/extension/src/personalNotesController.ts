@@ -76,13 +76,15 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
     },
     load() {
       const startedAtVersion = mutationVersion;
-      void store.load().then((notes) => {
+      void store.load().then(async (notes) => {
+        await pendingMutation;
         if (startedAtVersion !== mutationVersion || personalNotes.length > 0) {
           return;
         }
         personalNotes = Array.isArray(notes) ? notes : [];
         render();
-      }).catch(() => {
+      }).catch(async () => {
+        await pendingMutation;
         if (startedAtVersion !== mutationVersion) {
           return;
         }
@@ -94,7 +96,6 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
     },
     add({ videoId, cue, phrase }) {
       return serializeMutation(async () => {
-        mutationVersion += 1;
         const nextNote: PersonalNote = {
           id: noteId(videoId, cue, phrase),
           videoId,
@@ -116,6 +117,7 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
         try {
           await withNotesLock(async () => {
             const latest = await store.load();
+            mutationVersion += 1;
             rollbackNotes = latest;
             const persisted = upsertNote(latest, nextNote);
             personalNotes = persisted.notes;
@@ -133,13 +135,13 @@ export function createPersonalNotesController(deps: PersonalNotesControllerDeps)
     },
     remove(id) {
       return serializeMutation(async () => {
-        mutationVersion += 1;
         let latestNotes = personalNotes;
         personalNotes = personalNotes.filter((note) => note.id !== id);
         render();
         try {
           await withNotesLock(async () => {
             latestNotes = await store.load();
+            mutationVersion += 1;
             personalNotes = latestNotes.filter((note) => note.id !== id);
             render();
             await store.save(personalNotes);

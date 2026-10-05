@@ -230,6 +230,69 @@ describe("createPersonalNotesController", () => {
     expect(controller.notes()).toEqual([]);
   });
 
+  it("accepts a pending initial load after an add fails to read persisted notes", async () => {
+    let resolveInitialLoad: ((notes: PersonalNote[]) => void) | undefined;
+    const initialLoad = new Promise<PersonalNote[]>((resolve) => { resolveInitialLoad = resolve; });
+    let loadCount = 0;
+    const save = vi.fn(async () => {});
+    const { controller, setError } = createController({
+      load: () => ++loadCount === 1 ? initialLoad : Promise.reject(new Error("Native read failed")),
+      save,
+    });
+
+    controller.load();
+    await controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+    expect(controller.notes()).toEqual([]);
+    expect(setError).toHaveBeenCalledWith("Note not saved: Native read failed");
+    expect(save).not.toHaveBeenCalled();
+
+    resolveInitialLoad?.([existingNote]);
+    await initialLoad;
+    await Promise.resolve();
+    expect(controller.notes()).toEqual([existingNote]);
+  });
+
+  it("keeps an initial load that returns while the add read is still pending", async () => {
+    let resolveInitialLoad: ((notes: PersonalNote[]) => void) | undefined;
+    let rejectAddLoad: ((error: Error) => void) | undefined;
+    const initialLoad = new Promise<PersonalNote[]>((resolve) => { resolveInitialLoad = resolve; });
+    const addLoad = new Promise<PersonalNote[]>((_resolve, reject) => { rejectAddLoad = reject; });
+    let loadCount = 0;
+    const { controller } = createController({
+      load: () => ++loadCount === 1 ? initialLoad : addLoad,
+      save: async () => {},
+    });
+
+    controller.load();
+    const add = controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+    await vi.waitFor(() => expect(loadCount).toBe(2));
+    resolveInitialLoad?.([existingNote]);
+    await initialLoad;
+    rejectAddLoad?.(new Error("Native read failed"));
+    await add;
+
+    await vi.waitFor(() => expect(controller.notes()).toEqual([existingNote]));
+  });
+
+  it("prefers the newer read when saving fails after an initial load began", async () => {
+    let resolveInitialLoad: ((notes: PersonalNote[]) => void) | undefined;
+    const initialLoad = new Promise<PersonalNote[]>((resolve) => { resolveInitialLoad = resolve; });
+    let loadCount = 0;
+    const { controller, setError } = createController({
+      load: () => ++loadCount === 1 ? initialLoad : Promise.resolve([]),
+      save: async () => { throw new Error("Native save failed"); },
+    });
+
+    controller.load();
+    await controller.add({ videoId: "dQw4w9WgXcQ", cue, phrase });
+    resolveInitialLoad?.([existingNote]);
+    await initialLoad;
+    await Promise.resolve();
+
+    expect(controller.notes()).toEqual([]);
+    expect(setError).toHaveBeenCalledWith("Note not saved: Native save failed");
+  });
+
   it("does not overwrite persisted notes when the refresh before adding fails", async () => {
     let persisted = [existingNote];
     const save = vi.fn(async (notes: PersonalNote[]) => { persisted = notes; });
