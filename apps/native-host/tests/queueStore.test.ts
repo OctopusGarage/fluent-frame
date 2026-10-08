@@ -72,6 +72,22 @@ describe("QueueStore", () => {
     });
   });
 
+  it("marks a failed job ready when a later enqueue finds its cached result", async () => {
+    await withTempDir(async (dir) => {
+      const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });
+      const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      await store.claimNext();
+      await store.markFailed(job.id, "Agent failed");
+
+      const result = await store.enqueue({ videoId: job.videoId, captionLanguage: "en", cacheReady: true });
+
+      expect(result.message).toBe("Already ready");
+      expect(result.job.status).toBe("done");
+      expect(result.job.error).toBeUndefined();
+      expect((await store.getQueue()).jobs).toEqual([result.job]);
+    });
+  });
+
   it("requeues a completed job when its cached result is no longer ready", async () => {
     await withTempDir(async (dir) => {
       const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });

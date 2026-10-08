@@ -189,6 +189,11 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
         if (existing) {
           const timestamp = now();
           const enriched = mergeQueueMetadata(existing, input, timestamp);
+          if (input.cacheReady === true && enriched.status === "failed") {
+            const ready = doneWithoutError(enriched, timestamp);
+            await replaceJob(state.jobs, id, ready);
+            return { job: ready, message: "Already ready" };
+          }
           if (input.cacheReady === false && (enriched.status === "done" || enriched.status === "skipped")) {
             const requeued = queuedWithoutRunState(enriched, timestamp);
             await replaceJob(state.jobs, id, requeued);
