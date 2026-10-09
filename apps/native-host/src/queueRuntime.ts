@@ -23,6 +23,7 @@ function queueRunner(config: HostConfig, logger: Logger, store: QueueStore): Que
     store,
     logger,
     processJob: createQueuedJobProcessor(config, logger, store),
+    waitForBlockedJob: true,
   });
   runners.set(config.queueFile, runner);
   return runner;

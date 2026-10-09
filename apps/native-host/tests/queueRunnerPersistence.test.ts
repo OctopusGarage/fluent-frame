@@ -18,6 +18,84 @@ async function withQueue(fn: (dir: string) => Promise<void>): Promise<void> {
 }
 
 describe("QueueRunner persistence", () => {
+  it("resumes a queue at the stale threshold after an earlier worker dies", async () => {
+    await withQueue(async (dir) => {
+      let currentMs = Date.parse("2026-07-21T00:00:00.000Z");
+      const store = createQueueStore(join(dir, "jobs.json"), {
+        now: () => new Date(currentMs).toISOString(),
+        staleRunningMs: 100,
+      });
+      const first = (await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" })).job;
+      const second = (await store.enqueue({ videoId: "o3RPPjzciqo", captionLanguage: "en" })).job;
+      await store.claimNext(); // The original worker died while this job was fresh.
+      const processed: string[] = [];
+      const waits: number[] = [];
+      let active = 0;
+      let peakActive = 0;
+      const runner = createQueueRunner({
+        store,
+        heartbeatIntervalMs: 0,
+        waitForBlockedJob: true,
+        wait: async (ms) => {
+          waits.push(ms);
+          expect(processed).toEqual([]);
+          currentMs += ms;
+        },
+        processJob: async (job) => {
+          active += 1;
+          peakActive = Math.max(peakActive, active);
+          processed.push(job.id);
+          active -= 1;
+        },
+      });
+
+      await runner.start();
+
+      expect(waits).toEqual([100]);
+      expect(processed).toEqual([first.id, second.id]);
+      expect(peakActive).toBe(1);
+      expect((await store.getQueue()).jobs.map((job) => job.status)).toEqual(["done", "done"]);
+    });
+  });
+
+  it("leaves a live worker's heartbeating job alone while waiting for the next job", async () => {
+    await withQueue(async (dir) => {
+      let currentMs = Date.parse("2026-07-21T00:00:00.000Z");
+      const store = createQueueStore(join(dir, "jobs.json"), {
+        now: () => new Date(currentMs).toISOString(),
+        staleRunningMs: 100,
+      });
+      const first = (await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" })).job;
+      const second = (await store.enqueue({ videoId: "o3RPPjzciqo", captionLanguage: "en" })).job;
+      await store.claimNext();
+      const waits: number[] = [];
+      const processed: string[] = [];
+      const runner = createQueueRunner({
+        store,
+        heartbeatIntervalMs: 0,
+        waitForBlockedJob: true,
+        wait: async (ms) => {
+          waits.push(ms);
+          if (waits.length === 1) {
+            currentMs += 90;
+            await store.touchRunning(first.id);
+            currentMs += 10;
+          } else {
+            await store.markDone(first.id);
+            currentMs += ms;
+          }
+        },
+        processJob: async (job) => { processed.push(job.id); },
+      });
+
+      await runner.start();
+
+      expect(waits).toEqual([100, 90]);
+      expect(processed).toEqual([second.id]);
+      expect((await store.getQueue()).jobs.map((job) => job.status)).toEqual(["done", "done"]);
+    });
+  });
+
   it("keeps an in-flight job claimed when removal and another worker are requested", async () => {
     await withQueue(async (dir) => {
       const queueFile = join(dir, "jobs.json");

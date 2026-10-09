@@ -20,6 +20,7 @@ export type QueueStore = {
   markDone(jobId: string): Promise<QueueJob>;
   markFailed(jobId: string, error: string): Promise<QueueJob>;
   recoverStaleRunningJobs(): Promise<void>;
+  staleRecoveryDelayMs(): Promise<number | undefined>;
 };
 
 type QueueStoreOptions = {
@@ -312,6 +313,14 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
             : job
         )));
       });
+    },
+    async staleRecoveryDelayMs() {
+      const state = await readState();
+      const running = state.jobs.find((job) => job.status === "running");
+      if (!running || !state.jobs.some((job) => job.status === "queued")) {
+        return undefined;
+      }
+      return Math.max(1, staleRunningMs - (Date.parse(now()) - Date.parse(running.updatedAt)));
     },
   };
 }

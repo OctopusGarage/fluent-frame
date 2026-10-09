@@ -8,6 +8,7 @@ export type QueueRunner = {
 
 export type QueueWorkStore = {
   recoverStaleRunningJobs(): Promise<void>;
+  staleRecoveryDelayMs(): Promise<number | undefined>;
   claimNext(): Promise<QueueJob | undefined>;
   touchRunning(jobId: string): Promise<QueueJob | undefined>;
   markDone(jobId: string): Promise<QueueJob>;
@@ -19,6 +20,8 @@ export type QueueRunnerDeps = {
   logger?: Logger;
   processJob(job: QueueJob): Promise<void>;
   heartbeatIntervalMs?: number;
+  waitForBlockedJob?: boolean;
+  wait?: (ms: number) => Promise<void>;
 };
 
 function errorMessage(error: unknown): string {
@@ -36,6 +39,8 @@ export function createQueueRunner({
   logger,
   processJob,
   heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
+  waitForBlockedJob = false,
+  wait = (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
 }: QueueRunnerDeps): QueueRunner {
   let running = false;
   let recovered = false;
@@ -95,6 +100,14 @@ export function createQueueRunner({
       while (true) {
         const job = await store.claimNext();
         if (!job) {
+          if (waitForBlockedJob) {
+            const delay = await store.staleRecoveryDelayMs();
+            if (delay !== undefined) {
+              await wait(delay);
+              await store.recoverStaleRunningJobs();
+              continue;
+            }
+          }
           await logger?.log({
             level: "info",
             component: "queueRunner",

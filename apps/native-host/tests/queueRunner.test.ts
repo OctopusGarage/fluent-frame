@@ -20,6 +20,9 @@ function createMemoryStore(jobs: QueueJob[]): QueueWorkStore {
     async recoverStaleRunningJobs() {
       running = false;
     },
+    async staleRecoveryDelayMs() {
+      return undefined;
+    },
     async claimNext() {
       if (running) {
         return undefined;
@@ -139,6 +142,7 @@ describe("QueueRunner", () => {
     const processed: string[] = [];
     const store: QueueWorkStore = {
       async recoverStaleRunningJobs() {},
+      async staleRecoveryDelayMs() { return undefined; },
       async claimNext() {
         if (running) {
           return undefined;
