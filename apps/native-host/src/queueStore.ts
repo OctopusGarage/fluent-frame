@@ -1,5 +1,6 @@
 import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 import { parseQueueState, WORKFLOW_VERSION, type QueueJob, type QueueState } from "@fluent-frame/shared";
 import { writeJsonFileAtomically } from "./jsonFile.js";
 
@@ -15,10 +16,10 @@ export type QueueStore = {
   remove(jobId: string): Promise<QueueState>;
   retry(jobId: string): Promise<{ job: QueueJob; message: string }>;
   claimNext(): Promise<QueueJob | undefined>;
-  touchRunning(jobId: string): Promise<QueueJob | undefined>;
-  markProgress(jobId: string, progress: { completedBatches: number; totalBatches: number }): Promise<QueueJob | undefined>;
-  markDone(jobId: string): Promise<QueueJob>;
-  markFailed(jobId: string, error: string): Promise<QueueJob>;
+  touchRunning(jobId: string, claimId: string): Promise<QueueJob | undefined>;
+  markProgress(jobId: string, progress: { completedBatches: number; totalBatches: number }, claimId: string): Promise<QueueJob | undefined>;
+  markDone(jobId: string, claimId: string): Promise<QueueJob | undefined>;
+  markFailed(jobId: string, error: string, claimId: string): Promise<QueueJob | undefined>;
   recoverStaleRunningJobs(): Promise<void>;
   staleRecoveryDelayMs(): Promise<number | undefined>;
 };
@@ -83,13 +84,14 @@ function queuedWithoutRunState(job: QueueJob, updatedAt: string): QueueJob {
     completedBatches: _completedBatches,
     totalBatches: _totalBatches,
     error: _error,
+    claimId: _claimId,
     ...rest
   } = job;
   return { ...rest, status: "queued", updatedAt };
 }
 
 function doneWithoutError(job: QueueJob, updatedAt: string): QueueJob {
-  const { error: _error, ...rest } = job;
+  const { error: _error, claimId: _claimId, ...rest } = job;
   return { ...rest, status: "done", updatedAt, finishedAt: updatedAt };
 }
 
@@ -252,6 +254,7 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
         const runningJob: QueueJob = {
           ...nextJob,
           status: "running",
+          claimId: randomUUID(),
           startedAt: timestamp,
           updatedAt: timestamp,
           completedBatches: 0,
@@ -261,11 +264,11 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
         return runningJob;
       });
     },
-    async touchRunning(jobIdToTouch) {
+    async touchRunning(jobIdToTouch, claimId) {
       return withLock(async () => {
         const state = await readState();
         const job = state.jobs.find((candidate) => candidate.id === jobIdToTouch);
-        if (!job || job.status !== "running") {
+        if (!job || job.status !== "running" || job.claimId !== claimId) {
           return undefined;
         }
         const touchedJob: QueueJob = { ...job, updatedAt: now() };
@@ -273,11 +276,11 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
         return touchedJob;
       });
     },
-    async markProgress(jobIdToMark, progress) {
+    async markProgress(jobIdToMark, progress, claimId) {
       return withLock(async () => {
         const state = await readState();
         const job = state.jobs.find((candidate) => candidate.id === jobIdToMark);
-        if (!job || job.status !== "running") {
+        if (!job || job.status !== "running" || job.claimId !== claimId) {
           return undefined;
         }
         const timestamp = now();
@@ -291,16 +294,28 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
         return progressedJob;
       });
     },
-    markDone(jobIdToMark) {
-      return updateJob(jobIdToMark, (job) => {
-        const timestamp = now();
-        return doneWithoutError(job, timestamp);
+    async markDone(jobIdToMark, claimId) {
+      return withLock(async () => {
+        const state = await readState();
+        const job = state.jobs.find((candidate) => candidate.id === jobIdToMark);
+        if (!job) throw new Error("Queue job not found");
+        if (job.status !== "running" || job.claimId !== claimId) return undefined;
+        const done = doneWithoutError(job, now());
+        await replaceJob(state.jobs, jobIdToMark, done);
+        return done;
       });
     },
-    markFailed(jobIdToMark, error) {
-      return updateJob(jobIdToMark, (job) => {
+    async markFailed(jobIdToMark, error, claimId) {
+      return withLock(async () => {
+        const state = await readState();
+        const job = state.jobs.find((candidate) => candidate.id === jobIdToMark);
+        if (!job) throw new Error("Queue job not found");
+        if (job.status !== "running" || job.claimId !== claimId) return undefined;
         const timestamp = now();
-        return { ...job, status: "failed", updatedAt: timestamp, finishedAt: timestamp, error };
+        const { claimId: _claimId, ...rest } = job;
+        const failed: QueueJob = { ...rest, status: "failed", updatedAt: timestamp, finishedAt: timestamp, error };
+        await replaceJob(state.jobs, jobIdToMark, failed);
+        return failed;
       });
     },
     async recoverStaleRunningJobs() {
