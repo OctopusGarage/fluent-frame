@@ -10,9 +10,9 @@ export type QueueWorkStore = {
   recoverStaleRunningJobs(): Promise<void>;
   staleRecoveryDelayMs(): Promise<number | undefined>;
   claimNext(): Promise<QueueJob | undefined>;
-  touchRunning(jobId: string): Promise<QueueJob | undefined>;
-  markDone(jobId: string): Promise<QueueJob>;
-  markFailed(jobId: string, error: string): Promise<QueueJob>;
+  touchRunning(jobId: string, claimId: string): Promise<QueueJob | undefined>;
+  markDone(jobId: string, claimId: string): Promise<QueueJob | undefined>;
+  markFailed(jobId: string, error: string, claimId: string): Promise<QueueJob | undefined>;
 };
 
 export type QueueRunnerDeps = {
@@ -45,16 +45,16 @@ export function createQueueRunner({
   let running = false;
   let recovered = false;
 
-  function startHeartbeat(job: QueueJob): ReturnType<typeof setInterval> | undefined {
+  function startHeartbeat(job: QueueJob, claimId: string): ReturnType<typeof setInterval> | undefined {
     if (heartbeatIntervalMs <= 0) {
       return undefined;
     }
     return setInterval(() => {
-      void store.touchRunning(job.id).then((touched) => logger?.log({
+      void store.touchRunning(job.id, claimId).then((touched) => logger?.log({
         level: touched ? "debug" : "warn",
         component: "queueRunner",
         event: touched ? "job.heartbeat" : "job.heartbeatSkipped",
-        message: touched ? "Refreshed queued learning subtitle job heartbeat" : "Skipped heartbeat because queued job is no longer running",
+        message: touched ? "Refreshed queued learning subtitle job heartbeat" : "Skipped heartbeat because queue claim is no longer owned",
         jobId: job.id,
         videoId: job.videoId,
       })).catch((error: unknown) => logger?.log({
@@ -116,6 +116,8 @@ export function createQueueRunner({
           });
           return;
         }
+        if (!job.claimId) throw new Error("Queue claim missing ownership ID");
+        const claimId = job.claimId;
         await logger?.log({
           level: "info",
           component: "queueRunner",
@@ -125,7 +127,7 @@ export function createQueueRunner({
           videoId: job.videoId,
           details: { title: job.title, status: job.status },
         });
-        const heartbeat = startHeartbeat(job);
+        const heartbeat = startHeartbeat(job, claimId);
         try {
           let processingFailed = false;
           let processingError: unknown;
@@ -137,7 +139,18 @@ export function createQueueRunner({
           }
           if (processingFailed) {
             try {
-              await store.markFailed(job.id, errorMessage(processingError));
+              const failed = await store.markFailed(job.id, errorMessage(processingError), claimId);
+              if (!failed) {
+                await logger?.log({
+                  level: "warn",
+                  component: "queueRunner",
+                  event: "job.claimLost",
+                  message: "Skipped failure update because queue claim is no longer owned",
+                  jobId: job.id,
+                  videoId: job.videoId,
+                });
+                continue;
+              }
             } catch (error) {
               if (!isMissingJobError(error)) {
                 throw error;
@@ -164,7 +177,18 @@ export function createQueueRunner({
             continue;
           }
           try {
-            await store.markDone(job.id);
+            const done = await store.markDone(job.id, claimId);
+            if (!done) {
+              await logger?.log({
+                level: "warn",
+                component: "queueRunner",
+                event: "job.claimLost",
+                message: "Skipped completion update because queue claim is no longer owned",
+                jobId: job.id,
+                videoId: job.videoId,
+              });
+              continue;
+            }
           } catch (error) {
             if (!isMissingJobError(error)) {
               throw error;

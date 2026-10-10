@@ -18,6 +18,76 @@ async function withQueue(fn: (dir: string) => Promise<void>): Promise<void> {
 }
 
 describe("QueueRunner persistence", () => {
+  it.each([false, true])("does not let a recovered claim be changed by its prior worker (prior worker fails: %s)", async (fails) => {
+    await withQueue(async (dir) => {
+      let currentMs = Date.parse("2026-07-21T00:00:00.000Z");
+      const queueFile = join(dir, "jobs.json");
+      const firstLogFile = join(dir, "first-runner.log");
+      const options = { now: () => new Date(currentMs).toISOString(), staleRunningMs: 100 };
+      const firstStore = createQueueStore(queueFile, options);
+      const secondStore = createQueueStore(queueFile, options);
+      const { job } = await firstStore.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      let firstStarted!: () => void;
+      const firstClaimed = new Promise<void>((resolve) => { firstStarted = resolve; });
+      let releaseFirst!: () => void;
+      const firstCanFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+      let secondStarted!: () => void;
+      const secondClaimed = new Promise<void>((resolve) => { secondStarted = resolve; });
+      let releaseSecond!: () => void;
+      const secondCanFinish = new Promise<void>((resolve) => { releaseSecond = resolve; });
+      let firstClaimId: string | undefined;
+      let secondClaimId: string | undefined;
+      const firstRun = createQueueRunner({
+        store: firstStore,
+        logger: createLogger(firstLogFile),
+        heartbeatIntervalMs: 0,
+        processJob: async (claimed) => {
+          firstClaimId = claimed.claimId;
+          firstStarted();
+          await firstCanFinish;
+          expect(await firstStore.touchRunning(claimed.id, claimed.claimId!)).toBeUndefined();
+          expect(await firstStore.markProgress(claimed.id, { completedBatches: 9, totalBatches: 9 }, claimed.claimId!)).toBeUndefined();
+          if (fails) throw new Error("Prior worker failed late");
+        },
+      }).start();
+      await firstClaimed;
+      currentMs += 101;
+      const secondRun = createQueueRunner({
+        store: secondStore,
+        heartbeatIntervalMs: 0,
+        processJob: async (claimed) => {
+          secondClaimId = claimed.claimId;
+          secondStarted();
+          await secondCanFinish;
+        },
+      }).start();
+      await secondClaimed;
+      try {
+        releaseFirst();
+        await firstRun;
+        const current = (await secondStore.getQueue()).jobs[0];
+        expect(current).toMatchObject({
+          id: job.id,
+          claimId: secondClaimId,
+          status: "running",
+          completedBatches: 0,
+          updatedAt: new Date(currentMs).toISOString(),
+        });
+        expect(firstClaimId).toBeTruthy();
+        expect(secondClaimId).toBeTruthy();
+        expect(secondClaimId).not.toBe(firstClaimId);
+        const events = (await readFile(firstLogFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line).event);
+        expect(events).toContain("job.claimLost");
+        expect(events).not.toContain("job.completed");
+        expect(events).not.toContain("job.failed");
+      } finally {
+        releaseSecond();
+        await secondRun;
+      }
+      expect((await secondStore.getQueue()).jobs[0]?.status).toBe("done");
+    });
+  });
+
   it("resumes a queue at the stale threshold after an earlier worker dies", async () => {
     await withQueue(async (dir) => {
       let currentMs = Date.parse("2026-07-21T00:00:00.000Z");
@@ -67,7 +137,7 @@ describe("QueueRunner persistence", () => {
       });
       const first = (await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" })).job;
       const second = (await store.enqueue({ videoId: "o3RPPjzciqo", captionLanguage: "en" })).job;
-      await store.claimNext();
+      const claimed = await store.claimNext();
       const waits: number[] = [];
       const processed: string[] = [];
       const runner = createQueueRunner({
@@ -78,10 +148,10 @@ describe("QueueRunner persistence", () => {
           waits.push(ms);
           if (waits.length === 1) {
             currentMs += 90;
-            await store.touchRunning(first.id);
+            await store.touchRunning(first.id, claimed!.claimId!);
             currentMs += 10;
           } else {
-            await store.markDone(first.id);
+            await store.markDone(first.id, claimed!.claimId!);
             currentMs += ms;
           }
         },

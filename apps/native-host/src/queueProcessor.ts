@@ -11,6 +11,8 @@ export function isQueueReadyOutput(mode: ProcessVideoOutput["mode"]): boolean {
 
 export function createQueuedJobProcessor(config: HostConfig, logger: Logger, store: QueueStore) {
   return async function processQueuedJob(job: QueueJob): Promise<void> {
+    if (!job.claimId) throw new Error("Queue claim missing ownership ID");
+    const claimId = job.claimId;
     await logger.log({
       level: "info",
       component: "queueProcessor",
@@ -25,10 +27,11 @@ export function createQueuedJobProcessor(config: HostConfig, logger: Logger, sto
       captionLanguage: job.captionLanguage,
       ...(job.title ? { title: job.title } : {}),
       async onPartialResult(_result, progress) {
-        await store.markProgress(job.id, {
+        const updated = await store.markProgress(job.id, {
           completedBatches: progress.completedBatches,
           totalBatches: progress.totalBatches,
-        });
+        }, claimId);
+        if (!updated) return;
         await logger.log({
           level: "info",
           component: "queueProcessor",

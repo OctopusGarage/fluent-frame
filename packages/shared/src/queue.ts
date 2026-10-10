@@ -10,6 +10,7 @@ export type QueueJob = {
   captionLanguage: string;
   workflowVersion: string;
   status: QueueJobStatus;
+  claimId?: string;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
@@ -78,6 +79,7 @@ export function parseQueueJob(value: unknown, message = "Invalid queue job"): Qu
     const startedAt = parseOptionalTimestamp(value.startedAt, message);
     const finishedAt = parseOptionalTimestamp(value.finishedAt, message);
     const error = parseOptionalString(value.error, message);
+    const claimId = parseOptionalString(value.claimId, message);
     const completedBatches = parseOptionalNonNegativeNumber(value.completedBatches, message);
     const totalBatches = parseOptionalNonNegativeNumber(value.totalBatches, message);
     return {
@@ -88,6 +90,7 @@ export function parseQueueJob(value: unknown, message = "Invalid queue job"): Qu
       captionLanguage: parseCaptionLanguage(value.captionLanguage),
       workflowVersion: parseNonEmptyString(value.workflowVersion, message),
       status,
+      ...(claimId ? { claimId } : {}),
       createdAt: parseTimestamp(value.createdAt, message),
       updatedAt: parseTimestamp(value.updatedAt, message),
       ...(startedAt ? { startedAt } : {}),

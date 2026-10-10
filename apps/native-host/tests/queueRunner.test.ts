@@ -9,6 +9,7 @@ function job(videoId: string): QueueJob {
     captionLanguage: "en",
     workflowVersion: WORKFLOW_VERSION,
     status: "running",
+    claimId: "memory-claim",
     createdAt: "2026-07-21T00:00:00.000Z",
     updatedAt: "2026-07-21T00:00:00.000Z",
   };

@@ -15,6 +15,14 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 describe("QueueStore", () => {
+  it("still reports a missing job when completion or failure is persisted", async () => {
+    await withTempDir(async (dir) => {
+      const store = createQueueStore(join(dir, "jobs.json"));
+      await expect(store.markDone("dQw4w9WgXcQ:en:missing", "claim")).rejects.toThrow("Queue job not found");
+      await expect(store.markFailed("dQw4w9WgXcQ:en:missing", "failed", "claim")).rejects.toThrow("Queue job not found");
+    });
+  });
+
   it("persists an idempotent queued job", async () => {
     await withTempDir(async (dir) => {
       const queueFile = join(dir, "queue", "jobs.json");
@@ -76,8 +84,8 @@ describe("QueueStore", () => {
     await withTempDir(async (dir) => {
       const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });
       const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
-      await store.claimNext();
-      await store.markFailed(job.id, "Agent failed");
+      const claimed = await store.claimNext();
+      await store.markFailed(job.id, "Agent failed", claimed!.claimId!);
 
       const result = await store.enqueue({ videoId: job.videoId, captionLanguage: "en", cacheReady: true });
 
@@ -174,10 +182,10 @@ describe("QueueStore", () => {
         staleRunningMs: 30 * 60 * 1000,
       });
       const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
-      await store.claimNext();
+      const claimed = await store.claimNext();
 
       currentTime = "2026-07-21T00:20:00.000Z";
-      const touched = await store.touchRunning(job.id);
+      const touched = await store.touchRunning(job.id, claimed!.claimId!);
       expect(touched?.updatedAt).toBe("2026-07-21T00:20:00.000Z");
 
       currentTime = "2026-07-21T00:40:00.000Z";
@@ -195,10 +203,10 @@ describe("QueueStore", () => {
       let currentTime = "2026-07-21T00:00:00.000Z";
       const store = createQueueStore(join(dir, "jobs.json"), { now: () => currentTime });
       const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
-      await store.claimNext();
+      const claimed = await store.claimNext();
 
       currentTime = "2026-07-21T00:00:30.000Z";
-      const progressed = await store.markProgress(job.id, { completedBatches: 2, totalBatches: 9 });
+      const progressed = await store.markProgress(job.id, { completedBatches: 2, totalBatches: 9 }, claimed!.claimId!);
 
       expect(progressed).toMatchObject({
         status: "running",
@@ -217,7 +225,8 @@ describe("QueueStore", () => {
     await withTempDir(async (dir) => {
       const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });
       const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
-      await store.markFailed(job.id, "Codex timed out");
+      const claimed = await store.claimNext();
+      await store.markFailed(job.id, "Codex timed out", claimed!.claimId!);
 
       const retried = await store.retry(job.id);
       expect(retried.message).toBe("Queued");
@@ -233,8 +242,9 @@ describe("QueueStore", () => {
     await withTempDir(async (dir) => {
       const store = createQueueStore(join(dir, "jobs.json"), { now: () => "2026-07-21T00:00:00.000Z" });
       const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
-      await store.markFailed(job.id, "Codex timed out");
-      await store.markDone(job.id);
+      const claimed = await store.claimNext();
+      await store.markFailed(job.id, "Codex timed out", claimed!.claimId!);
+      await store.enqueue({ videoId: job.videoId, captionLanguage: "en", cacheReady: true });
 
       const retried = await store.retry(job.id);
 
