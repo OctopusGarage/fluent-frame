@@ -11,10 +11,10 @@
   "dependencies": {
     "@fluent-frame/shared": "workspace:*",
     "@vitejs/plugin-basic-ssl": "^2.1.0",
-    "vite": "^7.0.0"
+    "vite": "^7.3.7"
   },
   "devDependencies": {
-    "@types/chrome": "^0.3.4",
+    "@types/chrome": "^0.3.5",
     "jsdom": "^26.1.0"
   }
 }
