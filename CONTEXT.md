@@ -14,6 +14,7 @@ FluentFrame is a local-first Chrome extension for learning English from YouTube 
 - **Personal note**: A saved phrase or subtitle sentence, persisted through the native host.
 - **Queue job**: A native-host generation request for one video/language/workflow version.
 - **Queue coordinator**: The module that owns queue orchestration: enqueue, cache readiness, title enrichment, stale recovery, retry, remove, and worker start decisions.
+- **Queue repository**: The file-backed module that owns locked queue transactions, atomic persistence, and running-claim fencing. QueueStore preserves the legacy domain interface.
 - **Queue runner**: The module that claims queued jobs and executes generation work until the queue drains.
 - **Video processing pipeline**: The module that assembles agent runner, caption downloader, local cache, and remote cache before invoking subtitle generation.
 - **Native host transport**: The extension-to-native messaging adapter that validates and normalizes native responses.
@@ -42,3 +43,5 @@ Use `module`, `interface`, `depth`, `seam`, `adapter`, `leverage`, and `locality
 - `apps/extension/src/popupQueue.ts` owns popup queue rendering, queue actions, and pasted-URL enqueue form behavior.
 - `apps/extension/src/popupLibrary.ts` owns popup subtitle library rendering and cached-video actions.
 - `apps/extension/src/popupTabs.ts` owns popup active-tab commands.
+
+- `apps/native-host/src/queueRepository.ts` owns durable queue transactions and running-claim fencing; synchronous transitions keep slow work outside the lock.

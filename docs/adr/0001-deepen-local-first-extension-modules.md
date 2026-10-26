@@ -20,6 +20,7 @@ Use deep modules at stable seams:
 
 - Keep queue orchestration behind `QueueCoordinator`.
 - Keep queue execution behind `QueueRunner`.
+- Keep locked queue persistence and running-claim fencing behind `QueueRepository`; retain `QueueStore` as the legacy domain adapter.
 - Keep generation dependency assembly behind `videoProcessingPipeline`.
 - Keep detached worker spawning behind `queueWorkerProcess`.
 - Keep queue cache/title adapters behind `queueSupport`.
