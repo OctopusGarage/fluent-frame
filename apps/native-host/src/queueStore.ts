@@ -1,8 +1,6 @@
-import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
-import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { parseQueueState, WORKFLOW_VERSION, type QueueJob, type QueueState } from "@fluent-frame/shared";
-import { writeJsonFileAtomically } from "./jsonFile.js";
+import { WORKFLOW_VERSION, type QueueJob, type QueueState } from "@fluent-frame/shared";
+import { createQueueRepository } from "./queueRepository.js";
 
 export type QueueStore = {
   enqueue(input: {
@@ -29,19 +27,8 @@ type QueueStoreOptions = {
   staleRunningMs?: number;
 };
 
-const LOCK_RETRY_MS = 10;
-const STALE_LOCK_MS = 2 * 60 * 1000;
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function jobId(videoId: string, captionLanguage: string): string {
   return `${videoId}:${captionLanguage}:${WORKFLOW_VERSION}`;
-}
-
-function emptyQueue(): QueueState {
-  return { paused: false, jobs: [] };
 }
 
 function messageForStatus(status: QueueJob["status"]): string {
@@ -57,10 +44,6 @@ function messageForStatus(status: QueueJob["status"]): string {
   return "Retry required";
 }
 
-function runningJobId(jobs: QueueJob[]): string | undefined {
-  return jobs.find((job) => job.status === "running")?.id;
-}
-
 function mergeQueueMetadata(job: QueueJob, input: { url?: string; title?: string }, updatedAt: string): QueueJob {
   const title = input.title?.trim();
   const url = input.url?.trim();
@@ -70,11 +53,6 @@ function mergeQueueMetadata(job: QueueJob, input: { url?: string; title?: string
     ...(title && job.title !== title ? { title } : {}),
   };
   return nextJob.url === job.url && nextJob.title === job.title ? job : { ...nextJob, updatedAt };
-}
-
-function withRunningJobId(jobs: QueueJob[]): QueueState {
-  const running = runningJobId(jobs);
-  return { paused: false, ...(running ? { runningJobId: running } : {}), jobs };
 }
 
 function queuedWithoutRunState(job: QueueJob, updatedAt: string): QueueJob {
@@ -95,98 +73,14 @@ function doneWithoutError(job: QueueJob, updatedAt: string): QueueJob {
   return { ...rest, status: "done", updatedAt, finishedAt: updatedAt };
 }
 
-function normalizeState(value: unknown): QueueState {
-  return withRunningJobId(parseQueueState(value, "Invalid queue file").jobs);
-}
-
 export function createQueueStore(queueFile: string, options: QueueStoreOptions = {}): QueueStore {
   const now = options.now ?? (() => new Date().toISOString());
   const staleRunningMs = options.staleRunningMs ?? 2 * 60 * 1000;
-  const lockFile = `${queueFile}.lock`;
-
-  async function withLock<T>(operation: () => Promise<T>): Promise<T> {
-    await mkdir(dirname(queueFile), { recursive: true });
-    while (true) {
-      try {
-        const lock = await open(lockFile, "wx");
-        try {
-          return await operation();
-        } finally {
-          await lock.close();
-          await unlink(lockFile).catch((error: unknown) => {
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-              throw error;
-            }
-          });
-        }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
-          throw error;
-        }
-        const ageMs = await stat(lockFile).then((file) => Date.now() - file.mtimeMs).catch(() => 0);
-        if (ageMs >= STALE_LOCK_MS) {
-          await unlink(lockFile).catch(() => {});
-        } else {
-          await wait(LOCK_RETRY_MS);
-        }
-      }
-    }
-  }
-
-  async function readState(): Promise<QueueState> {
-    let content: string;
-    try {
-      content = await readFile(queueFile, "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return emptyQueue();
-      }
-      throw error;
-    }
-    try {
-      return normalizeState(JSON.parse(content) as unknown);
-    } catch {
-      await mkdir(dirname(queueFile), { recursive: true });
-      try {
-        await rename(queueFile, `${queueFile}.corrupt`);
-      } catch {
-        // If another request already moved it, a fresh queue is still the right recovery.
-      }
-      return emptyQueue();
-    }
-  }
-
-  async function writeState(state: QueueState): Promise<QueueState> {
-    const normalized = withRunningJobId(state.jobs);
-    await writeJsonFileAtomically(queueFile, normalized);
-    return normalized;
-  }
-
-  async function writeJobs(jobs: QueueJob[]): Promise<QueueState> {
-    return writeState({ paused: false, jobs });
-  }
-
-  async function replaceJob(jobs: QueueJob[], jobIdToReplace: string, nextJob: QueueJob): Promise<QueueState> {
-    return writeJobs(jobs.map((candidate) => candidate.id === jobIdToReplace ? nextJob : candidate));
-  }
-
-  async function updateJob(jobIdToUpdate: string, update: (job: QueueJob) => QueueJob): Promise<QueueJob> {
-    return withLock(async () => {
-      const state = await readState();
-      const job = state.jobs.find((candidate) => candidate.id === jobIdToUpdate);
-      if (!job) {
-        throw new Error("Queue job not found");
-      }
-      const nextJob = update(job);
-      await replaceJob(state.jobs, jobIdToUpdate, nextJob);
-      return nextJob;
-    });
-  }
+  const repository = createQueueRepository(queueFile);
 
   return {
     async enqueue(input) {
-      return withLock(async () => {
-        const state = await readState();
+      return repository.transact((state) => {
         const id = jobId(input.videoId, input.captionLanguage);
         const existing = state.jobs.find((job) => job.id === id);
         if (existing) {
@@ -194,18 +88,16 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           const enriched = mergeQueueMetadata(existing, input, timestamp);
           if (input.cacheReady === true && enriched.status === "failed") {
             const ready = doneWithoutError(enriched, timestamp);
-            await replaceJob(state.jobs, id, ready);
-            return { job: ready, message: "Already ready" };
+            return { jobs: state.jobs.map((job) => job.id === id ? ready : job), result: { job: ready, message: "Already ready" } };
           }
           if (input.cacheReady === false && (enriched.status === "done" || enriched.status === "skipped")) {
             const requeued = queuedWithoutRunState(enriched, timestamp);
-            await replaceJob(state.jobs, id, requeued);
-            return { job: requeued, message: "Queued" };
+            return { jobs: state.jobs.map((job) => job.id === id ? requeued : job), result: { job: requeued, message: "Queued" } };
           }
-          if (enriched !== existing) {
-            await replaceJob(state.jobs, id, enriched);
-          }
-          return { job: enriched, message: messageForStatus(enriched.status) };
+          return {
+            ...(enriched !== existing ? { jobs: state.jobs.map((job) => job.id === id ? enriched : job) } : {}),
+            result: { job: enriched, message: messageForStatus(enriched.status) },
+          };
         }
         const timestamp = now();
         const nextJob: QueueJob = {
@@ -220,35 +112,36 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           updatedAt: timestamp,
           ...(input.cacheReady ? { finishedAt: timestamp } : {}),
         };
-        await writeJobs([...state.jobs, nextJob]);
-        return { job: nextJob, message: input.cacheReady ? "Already ready" : "Queued" };
+        return { jobs: [...state.jobs, nextJob], result: { job: nextJob, message: input.cacheReady ? "Already ready" : "Queued" } };
       });
     },
-    getQueue: readState,
+    getQueue: repository.read,
     async remove(jobIdToRemove) {
-      return withLock(async () => {
-        const state = await readState();
+      return repository.transact((state) => {
         if (state.jobs.some((job) => job.id === jobIdToRemove && job.status === "running")) {
           throw new Error("Cannot remove a running queue job");
         }
-        return writeJobs(state.jobs.filter((job) => job.id !== jobIdToRemove));
+        const jobs = state.jobs.filter((job) => job.id !== jobIdToRemove);
+        return { jobs, result: { ...state, jobs } };
       });
     },
     async retry(jobIdToRetry) {
-      const job = await updateJob(jobIdToRetry, (current) => (
-        current.status === "failed" ? queuedWithoutRunState(current, now()) : current
-      ));
+      const job = await repository.transact((state) => {
+        const current = state.jobs.find((job) => job.id === jobIdToRetry);
+        if (!current) throw new Error("Queue job not found");
+        const next = current.status === "failed" ? queuedWithoutRunState(current, now()) : current;
+        return { jobs: state.jobs.map((job) => job.id === current.id ? next : job), result: next };
+      });
       return { job, message: job.status === "queued" ? "Queued" : messageForStatus(job.status) };
     },
     async claimNext() {
-      return withLock(async () => {
-        const state = await readState();
+      return repository.transact((state) => {
         if (state.jobs.some((job) => job.status === "running")) {
-          return undefined;
+          return { result: undefined };
         }
         const nextJob = state.jobs.find((job) => job.status === "queued");
         if (!nextJob) {
-          return undefined;
+          return { result: undefined };
         }
         const timestamp = now();
         const runningJob: QueueJob = {
@@ -260,77 +153,42 @@ export function createQueueStore(queueFile: string, options: QueueStoreOptions =
           completedBatches: 0,
           totalBatches: nextJob.totalBatches ?? 0,
         };
-        await replaceJob(state.jobs, runningJob.id, runningJob);
-        return runningJob;
+        return { jobs: state.jobs.map((job) => job.id === runningJob.id ? runningJob : job), result: runningJob };
       });
     },
-    async touchRunning(jobIdToTouch, claimId) {
-      return withLock(async () => {
-        const state = await readState();
-        const job = state.jobs.find((candidate) => candidate.id === jobIdToTouch);
-        if (!job || job.status !== "running" || job.claimId !== claimId) {
-          return undefined;
-        }
-        const touchedJob: QueueJob = { ...job, updatedAt: now() };
-        await replaceJob(state.jobs, jobIdToTouch, touchedJob);
-        return touchedJob;
-      });
+    touchRunning(jobIdToTouch, claimId) {
+      return repository.updateRunning(jobIdToTouch, claimId, (job) => ({ ...job, updatedAt: now() }));
     },
-    async markProgress(jobIdToMark, progress, claimId) {
-      return withLock(async () => {
-        const state = await readState();
-        const job = state.jobs.find((candidate) => candidate.id === jobIdToMark);
-        if (!job || job.status !== "running" || job.claimId !== claimId) {
-          return undefined;
-        }
-        const timestamp = now();
-        const progressedJob: QueueJob = {
-          ...job,
-          updatedAt: timestamp,
-          completedBatches: progress.completedBatches,
-          totalBatches: progress.totalBatches,
-        };
-        await replaceJob(state.jobs, jobIdToMark, progressedJob);
-        return progressedJob;
-      });
+    markProgress(jobIdToMark, progress, claimId) {
+      return repository.updateRunning(jobIdToMark, claimId, (job) => ({
+        ...job,
+        updatedAt: now(),
+        completedBatches: progress.completedBatches,
+        totalBatches: progress.totalBatches,
+      }));
     },
-    async markDone(jobIdToMark, claimId) {
-      return withLock(async () => {
-        const state = await readState();
-        const job = state.jobs.find((candidate) => candidate.id === jobIdToMark);
-        if (!job) throw new Error("Queue job not found");
-        if (job.status !== "running" || job.claimId !== claimId) return undefined;
-        const done = doneWithoutError(job, now());
-        await replaceJob(state.jobs, jobIdToMark, done);
-        return done;
-      });
+    markDone(jobIdToMark, claimId) {
+      return repository.updateRunning(jobIdToMark, claimId, (job) => doneWithoutError(job, now()), "throw");
     },
-    async markFailed(jobIdToMark, error, claimId) {
-      return withLock(async () => {
-        const state = await readState();
-        const job = state.jobs.find((candidate) => candidate.id === jobIdToMark);
-        if (!job) throw new Error("Queue job not found");
-        if (job.status !== "running" || job.claimId !== claimId) return undefined;
+    markFailed(jobIdToMark, error, claimId) {
+      return repository.updateRunning(jobIdToMark, claimId, (job) => {
         const timestamp = now();
         const { claimId: _claimId, ...rest } = job;
-        const failed: QueueJob = { ...rest, status: "failed", updatedAt: timestamp, finishedAt: timestamp, error };
-        await replaceJob(state.jobs, jobIdToMark, failed);
-        return failed;
-      });
+        return { ...rest, status: "failed", updatedAt: timestamp, finishedAt: timestamp, error };
+      }, "throw");
     },
     async recoverStaleRunningJobs() {
-      await withLock(async () => {
-        const state = await readState();
+      await repository.transact((state) => {
         const timestamp = now();
-        await writeJobs(state.jobs.map((job) => (
+        return { jobs: state.jobs.map((job) => (
           job.status === "running" && Date.parse(timestamp) - Date.parse(job.updatedAt) >= staleRunningMs
             ? queuedWithoutRunState(job, timestamp)
             : job
-        )));
+        )), result: undefined };
       });
     },
     async staleRecoveryDelayMs() {
-      const state = await readState();
+      const state = await repository.read();
       const running = state.jobs.find((job) => job.status === "running");
       if (!running || !state.jobs.some((job) => job.status === "queued")) {
         return undefined;
