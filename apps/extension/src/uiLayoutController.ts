@@ -38,7 +38,9 @@ export function createUiLayoutController(deps: UiLayoutControllerDeps): UiLayout
   let loadedUiState = readUiState(deps.win);
 
   function persist(): void {
+    const { subtitleLanguageMode } = readUiState(deps.win);
     writeUiState(deps.win, {
+      ...(subtitleLanguageMode === undefined ? {} : { subtitleLanguageMode }),
       layout: isLayoutMode(deps.root.dataset.layout) ? deps.root.dataset.layout : "panel",
       panelCollapsed: deps.root.dataset.panelCollapsed === "true",
       overlayHidden: deps.root.dataset.overlayHidden === "true",

@@ -504,6 +504,52 @@ describe("createCoachUi", () => {
     expect(document.getElementById("ff-chinese")?.textContent).toBe("传得漂亮。");
   });
 
+  it.each([
+    ['[data-layout-option="drawer"]', "layout", "drawer"],
+    ["#ff-toggle-overlay", "overlayHidden", "true"],
+    ['[data-now-size="large"]', "nowSize", "large"],
+  ])("preserves subtitle language across %s and recreation", (selector, field, value) => {
+    createCoachUi(document).mount(document.body);
+    document.querySelector<HTMLButtonElement>("#ff-toggle-subtitle-language")!.click();
+    document.querySelector<HTMLButtonElement>(selector)!.click();
+
+    document.body.replaceChildren();
+    createCoachUi(document).mount(document.body);
+
+    expect(document.getElementById("ff-root")?.dataset[field]).toBe(value);
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("english");
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(true);
+    expect(document.getElementById("ff-toggle-subtitle-language")?.getAttribute("aria-pressed")).toBe("true");
+
+    // A later language choice must replace the restored preference too.
+    document.querySelector<HTMLButtonElement>("#ff-toggle-subtitle-language")!.click();
+    document.querySelector<HTMLButtonElement>(selector)!.click();
+    document.body.replaceChildren();
+    createCoachUi(document).mount(document.body);
+
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("bilingual");
+    expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+  });
+
+  it.each([null, "{", '{"subtitleLanguageMode":"invalid"}'])(
+    "keeps the bilingual default through a layout save with stored state %s",
+    (storedState) => {
+      if (storedState !== null) {
+        window.localStorage.setItem("fluentFrame.uiState.v1", storedState);
+      }
+      createCoachUi(document).mount(document.body);
+      expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("bilingual");
+      document.querySelector<HTMLButtonElement>('[data-now-size="large"]')!.click();
+
+      document.body.replaceChildren();
+      createCoachUi(document).mount(document.body);
+
+      expect(document.getElementById("ff-root")?.dataset.nowSize).toBe("large");
+      expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("bilingual");
+      expect(document.getElementById("ff-chinese")?.hidden).toBe(false);
+    },
+  );
+
   it("hides the full FluentFrame pane from the panel header and restores it from the badge", () => {
     const ui = createCoachUi(document);
     ui.mount(document.body);
@@ -784,7 +830,12 @@ describe("createCoachUi", () => {
     document.dispatchEvent(new MouseEvent("mousemove", { clientX: 180, clientY: 190, bubbles: true }));
     document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
-    document.querySelector<HTMLButtonElement>("#ff-reset-layout")?.click();
+    document.querySelector<HTMLButtonElement>("#ff-toggle-subtitle-language")!.click();
+    document.querySelector<HTMLButtonElement>("#ff-reset-layout")!.click();
+
+    expect(window.localStorage.getItem("fluentFrame.uiState.v1")).toBeNull();
+    // Reset clears saved state, while the current page retains its language.
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("english");
 
     expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
     expect(document.getElementById("ff-root")?.dataset.overlayHidden).toBe("false");
@@ -795,8 +846,12 @@ describe("createCoachUi", () => {
     expect(panel?.style.left).toBe("");
     expect(panel?.style.top).toBe("");
 
+    // Saving layout after reset must not resurrect the cleared preference.
+    document.querySelector<HTMLButtonElement>('[data-now-size="medium"]')!.click();
     document.body.replaceChildren();
     createCoachUi(document).mount(document.body);
+
+    expect(document.getElementById("ff-root")?.dataset.subtitleLanguageMode).toBe("bilingual");
 
     expect(document.getElementById("ff-root")?.dataset.panelCollapsed).toBe("false");
     expect(document.getElementById("ff-root")?.dataset.layout).toBe("panel");
