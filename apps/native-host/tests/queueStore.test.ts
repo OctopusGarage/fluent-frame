@@ -15,6 +15,100 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 }
 
 describe("QueueStore", () => {
+  it.each(["heartbeat", "progress", "done", "failed"] as const)("fences %s against a replacement claim without clock reads or disk writes", async (operation) => {
+    await withTempDir(async (dir) => {
+      const queueFile = join(dir, "jobs.json");
+      let currentMs = Date.parse("2026-07-21T00:00:00.000Z");
+      let clockReads = 0;
+      const options = {
+        now: () => { clockReads += 1; return new Date(currentMs).toISOString(); },
+        staleRunningMs: 100,
+      };
+      const oldWorker = createQueueStore(queueFile, options);
+      const replacement = createQueueStore(queueFile, options);
+      const { job } = await oldWorker.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      const oldClaim = (await oldWorker.claimNext())!.claimId!;
+      await oldWorker.markProgress(job.id, { completedBatches: 3, totalBatches: 7 }, oldClaim);
+      currentMs += 100;
+      await replacement.recoverStaleRunningJobs();
+      const claimed = (await replacement.claimNext())!;
+      await replacement.markProgress(job.id, { completedBatches: 1, totalBatches: 5 }, claimed.claimId!);
+      // Deliberate formatting makes an otherwise identical atomic rewrite observable.
+      const snapshot = await replacement.getQueue();
+      const original = `${JSON.stringify(snapshot, null, 4)}\n`;
+      await writeFile(queueFile, original);
+      const readsBefore = clockReads;
+      const result = await (operation === "heartbeat" ? oldWorker.touchRunning(job.id, oldClaim)
+        : operation === "progress" ? oldWorker.markProgress(job.id, { completedBatches: 7, totalBatches: 7 }, oldClaim)
+        : operation === "done" ? oldWorker.markDone(job.id, oldClaim)
+        : oldWorker.markFailed(job.id, "Late failure", oldClaim));
+
+      expect(result).toBeUndefined();
+      expect(clockReads).toBe(readsBefore);
+      expect(claimed.claimId).not.toBe(oldClaim);
+      await expect(readFile(queueFile, "utf8")).resolves.toBe(original);
+      expect(await replacement.getQueue()).toEqual(snapshot);
+      await expect(readFile(`${queueFile}.lock`, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      // The displaced worker's no-op must not disable the current owner's writes.
+      const finished = await replacement.markDone(job.id, claimed.claimId!);
+      expect(finished).toMatchObject({ status: "done", completedBatches: 1, totalBatches: 5 });
+      expect(finished?.claimId).toBeUndefined();
+    });
+  });
+
+  it("preserves missing, non-running and legacy claim behavior across all owned writes", async () => {
+    await withTempDir(async (dir) => {
+      const queueFile = join(dir, "jobs.json");
+      const store = createQueueStore(queueFile, { staleRunningMs: 0 });
+      await expect(store.touchRunning("missing", "claim")).resolves.toBeUndefined();
+      await expect(store.markProgress("missing", { completedBatches: 1, totalBatches: 2 }, "claim")).resolves.toBeUndefined();
+      const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      for (const status of ["queued", "running", "done", "failed", "skipped"] as const) {
+        // Legacy running jobs without claimId are readable, but no caller owns them.
+        const original = JSON.stringify({ paused: false, jobs: [{ ...job, status }] }, null, 2);
+        await writeFile(queueFile, original);
+        await expect(store.touchRunning(job.id, "claim")).resolves.toBeUndefined();
+        await expect(store.markProgress(job.id, { completedBatches: 1, totalBatches: 2 }, "claim")).resolves.toBeUndefined();
+        await expect(store.markDone(job.id, "claim")).resolves.toBeUndefined();
+        await expect(store.markFailed(job.id, "Late failure", "claim")).resolves.toBeUndefined();
+        await expect(readFile(queueFile, "utf8")).resolves.toBe(original);
+      }
+      await writeFile(queueFile, JSON.stringify({ paused: false, jobs: [{ ...job, status: "running" }] }));
+      await store.recoverStaleRunningJobs();
+      const claimed = (await store.claimNext())!;
+      expect(claimed.claimId).toBeTruthy();
+      expect(await store.getQueue()).toMatchObject({ paused: false, runningJobId: job.id });
+    });
+  });
+
+  it.each([false, true])("persists owned heartbeat, progress and terminal fields (fails: %s)", async (fails) => {
+    await withTempDir(async (dir) => {
+      const queueFile = join(dir, "jobs.json");
+      let currentTime = "2026-07-21T00:00:00.000Z";
+      const store = createQueueStore(queueFile, { now: () => currentTime });
+      const { job } = await store.enqueue({ videoId: "dQw4w9WgXcQ", captionLanguage: "en" });
+      const claimed = (await store.claimNext())!;
+      currentTime = "2026-07-21T00:00:10.000Z";
+      const progressed = await store.markProgress(job.id, { completedBatches: 2, totalBatches: 3 }, claimed.claimId!);
+      currentTime = "2026-07-21T00:00:20.000Z";
+      const touched = await store.touchRunning(job.id, claimed.claimId!);
+      expect(touched).toEqual({ ...progressed, updatedAt: currentTime });
+      currentTime = "2026-07-21T00:00:30.000Z";
+      const terminal = fails
+        ? await store.markFailed(job.id, "Agent failed", claimed.claimId!)
+        : await store.markDone(job.id, claimed.claimId!);
+      expect(terminal).toMatchObject({
+        status: fails ? "failed" : "done", startedAt: claimed.startedAt,
+        updatedAt: currentTime, finishedAt: currentTime, completedBatches: 2, totalBatches: 3,
+      });
+      expect(terminal?.claimId).toBeUndefined();
+      expect(terminal?.error).toBe(fails ? "Agent failed" : undefined);
+      expect(await createQueueStore(queueFile).getQueue()).toEqual({ paused: false, jobs: [terminal] });
+      await expect(store.touchRunning(job.id, claimed.claimId!)).resolves.toBeUndefined();
+      await expect(store.markProgress(job.id, { completedBatches: 3, totalBatches: 3 }, claimed.claimId!)).resolves.toBeUndefined();
+    });
+  });
+
   it("still reports a missing job when completion or failure is persisted", async () => {
     await withTempDir(async (dir) => {
       const store = createQueueStore(join(dir, "jobs.json"));

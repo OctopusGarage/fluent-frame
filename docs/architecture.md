@@ -109,6 +109,28 @@ Duplicate clicks return the existing job state:
 The native host keeps queue execution serial so local Codex or Claude does not
 run multiple expensive generations at once.
 
+Queue persistence follows one internal seam:
+
+```text
+queueRunner / queueProcessor / queueCoordinator
+  -> QueueStore (queue transitions and compatible caller methods)
+  -> queueRepository (locked reread, claim fencing, atomic persistence)
+  -> shared queue parser / filesystem / jsonFile
+```
+
+`queueRepository` keeps no mirrored state. Every mutation rereads the durable
+snapshot under the queue file lock. Heartbeat, progress, success and failure
+updates use its single `updateRunning` transaction: only the matching running
+claim can invoke a transition and write. Rejected claims return `undefined`
+without writing; missing terminal jobs still throw `Queue job not found`, while
+missing heartbeat/progress jobs are no-ops. Legacy jobs without claim IDs remain
+readable and can be recovered through the existing stale-job policy.
+
+QueueStore supplies synchronous transition decisions; it does not manage file
+locks or atomic writes. No generation, logging, callbacks to observers, or stale
+recovery waits run inside repository transactions. Existing lock expiry,
+corrupt-file backup and unlocked snapshot-read behavior are preserved.
+
 On YouTube watch pages, the background service worker registers Chrome
 context-menu actions for YouTube video links and the current watch page. This
 keeps recommendation queueing inside the browser's native right-click workflow,
