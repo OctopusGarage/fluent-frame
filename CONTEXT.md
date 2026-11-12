@@ -28,6 +28,8 @@ Use `module`, `interface`, `depth`, `seam`, `adapter`, `leverage`, and `locality
 
 - `apps/native-host/src/queueCoordinator.ts` is the queue orchestration module.
 - `apps/native-host/src/queueRunner.ts` is the queue execution module.
+- `apps/native-host/src/queueStore.ts` owns queue transitions and preserves the queue caller interface.
+- `apps/native-host/src/queueRepository.ts` owns file-backed queue transactions, locked claim fencing, snapshot normalization, and atomic persistence.
 - `apps/native-host/src/videoProcessingPipeline.ts` is the generation dependency assembly module.
 - `apps/native-host/src/queueSupport.ts` contains cache readiness and title resolution adapters for queue orchestration.
 - `apps/native-host/src/queueWorkerProcess.ts` contains detached queue worker process startup.
